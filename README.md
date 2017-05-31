@@ -7,10 +7,12 @@ build instructions:
 * open .sln file in VS2017 community edition or compatible
 * set build configuration to x64 (release or debug)
 
+Reposiotry so far has only 1 project in it:
+
 Additional File Formats
 -------------------------
 * STL export 
 * STL import
-* OBJ import (vertex color/weightmap support)
-* OBJ export (vertex color/weightmap support/speed improved over XSI factory export)
-* PLY import (vertex color/
+* OBJ import (vertex color/UV/weightmap support)
+* OBJ export (vertex color/UV/weightmap support)
+* PLY import (vertex color/UV support) - experimental version
