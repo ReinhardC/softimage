@@ -1,9 +1,11 @@
 # softimage
 Softimage XSI♰ plugin projects
 
-Repository so far has only 1 project in it:
+please report an issue if you find one!
+ 
+github repository so far has only 1 project in it:
 
-"Additional File Formats"
+* /"Additional File Formats"/
 
 features
 -------------------------
@@ -11,7 +13,7 @@ features
 * STL import
 * OBJ import (with vertex color/UV/weightmap support)
 * OBJ export (higher speed/with vertex color/UV/weightmap support)
-* PLY import (vertex color/UV support) - experimental version
+* experimental PLY import (vertex color/UV support)
 
 installation instructions:
 ---------------------
