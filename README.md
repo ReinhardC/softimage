@@ -3,7 +3,9 @@ Softimage XSI♰ plugin projects
 
 Repository so far has only 1 project in it:
 
-"Additional File Formats" features
+"Additional File Formats"
+
+features
 -------------------------
 * STL export 
 * STL import
