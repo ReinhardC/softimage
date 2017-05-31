@@ -289,3 +289,7 @@ __pycache__/
 *.btm.cs
 *.odx.cs
 *.xsd.cs
+
+# generated from XSI addon packing
+netview*.xml
+*.xsiaddon
