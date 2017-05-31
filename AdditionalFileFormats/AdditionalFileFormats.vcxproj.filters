@@ -1,0 +1,43 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="Plugin_Main.cpp" />
+    <ClCompile Include="PLY.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="FileFormat.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="OBJ.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="STL.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="f3hash.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="FileFormat.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="OBJ.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="STL.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="PLY.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="headers">
+      <UniqueIdentifier>{aebfa438-1856-4938-8698-384a5b88a24e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src">
+      <UniqueIdentifier>{c584c25b-a678-406d-8676-f95d1d914429}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>
