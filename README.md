@@ -1,6 +1,6 @@
 # Softimage XSI♰ plugin projects
 
-please report an issue if you find one!
+please report any issues!
  
 github repository so far has only 1 project in it:
 
