@@ -7,7 +7,7 @@ build instructions:
 * open .sln file in VS2017 community edition or compatible
 * set build configuration to x64 (release or debug)
 
-Reposiotry so far has only 1 project in it:
+Repository so far has only 1 project in it:
 
 Additional File Formats
 -------------------------
