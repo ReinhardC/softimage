@@ -1,11 +1,10 @@
-# softimage
-Softimage XSI♰ plugin projects
+# Softimage XSI♰ plugin projects
 
 please report an issue if you find one!
  
 github repository so far has only 1 project in it:
 
-* /"Additional File Formats"/
+* *"Additional File Formats"*
 
 features
 -------------------------
