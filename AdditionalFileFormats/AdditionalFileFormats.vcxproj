@@ -124,7 +124,7 @@
       </SubSystem>
       <AdditionalDependencies>sicppsdk.lib;sicoresdk.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(XSISDK_ROOT)\lib\nt-x86-64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <OutputFile>../../../Addons/AdditionalFileFormats/Application/Plugins/AdditionalFileFormats.64.dll</OutputFile>
+      <OutputFile>../Workgroup/Addons/$(MSBuildProjectName)/Application/Plugins/$(MSBuildProjectName).64.dll</OutputFile>
       <FullProgramDatabaseFile>true</FullProgramDatabaseFile>
       <GenerateDebugInformation>DebugFastLink</GenerateDebugInformation>
       <GenerateMapFile>false</GenerateMapFile>
@@ -175,7 +175,7 @@
       <EnableCOMDATFolding>
       </EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <OutputFile>../../../Addons/AdditionalFileFormats/Application/Plugins/AdditionalFileFormats.64.dll</OutputFile>
+      <OutputFile>../Workgroup/Addons/$(MSBuildProjectName)/Application/Plugins/$(MSBuildProjectName).64.dll</OutputFile>
       <AdditionalLibraryDirectories>$(XSISDK_ROOT)\lib\nt-x86-64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>sicppsdk.lib;sicoresdk.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <GenerateDebugInformation>false</GenerateDebugInformation>
