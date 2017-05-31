@@ -9,6 +9,10 @@
 *.userosscache
 *.sln.docstates
 
+# generated from XSI addon packing
+netview*.xml
+*.xsiaddon
+
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
 
@@ -289,7 +293,3 @@ __pycache__/
 *.btm.cs
 *.odx.cs
 *.xsd.cs
-
-# generated from XSI addon packing
-netview*.xml
-*.xsiaddon
