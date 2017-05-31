@@ -9,9 +9,6 @@
 *.userosscache
 *.sln.docstates
 
-# generated from XSI addon packing
-netview*.xml
-
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
 
