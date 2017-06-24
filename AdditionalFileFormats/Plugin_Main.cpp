@@ -113,9 +113,10 @@ XSIPLUGINCALLBACK CStatus ExportOBJ_Init(CRef& in_ctxt)
 	args.Add(L"FolderAndFileName", L"");	
 	args.Add(L"ExportColorAtVertices", true);
 	args.Add(L"ExportToSeparateFiles", false);
+	args.Add(L"WriteMTLFile", true);
 	args.Add(L"UseLocalCoords", false);
 
-	cmd.PutDescription(L"ExportOBJ([col]Objects, [str]FolderAndFileName, [bool]ExportColorAtVertices, [bool]ExportToSeparateFiles, [bool]UseLocalCoords)");
+	cmd.PutDescription(L"ExportOBJ([col]Objects, [str]FolderAndFileName, [bool]ExportColorAtVertices, [bool]ExportToSeparateFiles, [bool]WriteMTLFile, [bool]UseLocalCoords)");
 
 	return CStatus::OK;
 }
@@ -130,7 +131,8 @@ XSIPLUGINCALLBACK CStatus ExportOBJ_Execute(XSI::CRef& in_ctxt)
 	CString FolderAndFileName(args.GetItem(1).GetValue());
 	bool ExportColorAtVertices(args.GetItem(2).GetValue());
 	bool ExportToSeparateFiles(args.GetItem(3).GetValue());
-	bool UseLocalCoords(args.GetItem(4).GetValue());
+	bool WriteMTLFile(args.GetItem(4).GetValue());
+	bool UseLocalCoords(args.GetItem(5).GetValue());
 	
 	if (FolderAndFileName.IsEmpty()) {
 		app.LogMessage(L"No Filename Specified in Arguments");
@@ -138,7 +140,7 @@ XSIPLUGINCALLBACK CStatus ExportOBJ_Execute(XSI::CRef& in_ctxt)
 	}
 	
 	COBJ obj;
-	return obj.Execute_Export(Objects, FolderAndFileName.GetAsciiString(), ExportColorAtVertices, ExportToSeparateFiles, UseLocalCoords);
+	return obj.Execute_Export(Objects, FolderAndFileName.GetAsciiString(), ExportColorAtVertices, ExportToSeparateFiles, WriteMTLFile, UseLocalCoords);
 }
 
 XSIPLUGINCALLBACK CStatus ImportOBJ_Init(CRef& in_ctxt)

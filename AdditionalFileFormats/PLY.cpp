@@ -17,6 +17,8 @@ size_t sizeof_str(string type) {
 		return sizeof(int);
 	else if (type == "long" || type == "int64")
 		return sizeof(long);
+	
+	return 0;
 }
 
 bool CPLY::read_header(FILE* file, vector<elementinfo*> &out_elinfo, bool &bBinary) {
@@ -85,6 +87,8 @@ bool CPLY::read_header(FILE* file, vector<elementinfo*> &out_elinfo, bool &bBina
 			bBinary = (tokens[1] != "ascii");
 		}
 	}
+
+	return true;
 }
 
 CStatus CPLY::Execute_Import(string initFilePathName, bool bImportUVs, bool bImportUserNormals, bool bImportMask, bool bImportPolypaint)
@@ -120,7 +124,7 @@ CStatus CPLY::Execute_Import(string initFilePathName, bool bImportUVs, bool bImp
 
 	long next_struct_offset;
 
-	for(int iElem=0, iElem_max = header.size(); iElem<iElem_max; iElem++)
+	for(int iElem=0, iElem_max = (int)header.size(); iElem<iElem_max; iElem++)
 	{
 		elementinfo *pCurrHeaderElem = header[iElem];
 		app.LogMessage(CString(iElem+1) + ". Element: " + pCurrHeaderElem->name.c_str() + " (size=" + CString(pCurrHeaderElem->size) + "), count = "+CString(pCurrHeaderElem->count));
@@ -152,10 +156,9 @@ CStatus CPLY::Execute_Import(string initFilePathName, bool bImportUVs, bool bImp
 				bool blX_initialized = false, blY_initialized = false, blZ_initialized = false;
 
 				float X, Y, Z;
-				double lX, lY, lZ;
 				unsigned char R, G, B;
 				
-				for (int iProp = 0, iProp_max = pCurrHeaderElem->names.size(); iProp < iProp_max; iProp++) {
+				for (int iProp = 0, iProp_max = (int)pCurrHeaderElem->names.size(); iProp < iProp_max; iProp++) {
 					string& type = pCurrHeaderElem->types[iProp];
 					string& name = pCurrHeaderElem->names[iProp];
 
@@ -243,7 +246,7 @@ CStatus CPLY::Execute_Import(string initFilePathName, bool bImportUVs, bool bImp
 				
 				char vertex_indices_count = 0;
 
-				for (int iProp = 0, iProp_max = pCurrHeaderElem->names.size(); iProp < iProp_max; iProp++) {
+				for (int iProp = 0, iProp_max = (int)pCurrHeaderElem->names.size(); iProp < iProp_max; iProp++) {
 					string& type = pCurrHeaderElem->types[iProp];
 					string& name = pCurrHeaderElem->names[iProp];
 
@@ -253,7 +256,7 @@ CStatus CPLY::Execute_Import(string initFilePathName, bool bImportUVs, bool bImp
 							next_struct_offset += (long)sizeof_str(type);
 						}
 						else {							
-							vertex_indices_count = atoi(tokens[next_struct_offset].c_str());
+							vertex_indices_count = (char)atoi(tokens[next_struct_offset].c_str());
 							next_struct_offset += 1;
 						}
 					} else if (name == "texcoord") {
@@ -262,7 +265,7 @@ CStatus CPLY::Execute_Import(string initFilePathName, bool bImportUVs, bool bImp
 							next_struct_offset += (long)sizeof_str(type);
 						}
 						else {
-							vertex_indices_count = atoi(tokens[next_struct_offset].c_str());
+							vertex_indices_count = (char)atoi(tokens[next_struct_offset].c_str());
 							next_struct_offset += 1;
 						}
 					}
@@ -302,7 +305,7 @@ CStatus CPLY::Execute_Import(string initFilePathName, bool bImportUVs, bool bImp
 				float U, V;
 				char tx;
 
-				for (int iProp = 0, iProp_max = pCurrHeaderElem->names.size(); iProp < iProp_max; iProp++) {
+				for (int iProp = 0, iProp_max = (int)pCurrHeaderElem->names.size(); iProp < iProp_max; iProp++) {
 					string& type = pCurrHeaderElem->types[iProp];
 					string& name = pCurrHeaderElem->names[iProp];
 
@@ -344,7 +347,7 @@ CStatus CPLY::Execute_Import(string initFilePathName, bool bImportUVs, bool bImp
 
 				if (bTx_initialized && bU_initialized && bV_initialized && tx == 0) { // only use texture #0
 						UVs_inFile.Add(U);
-						UVs_inFile.Add(1.0-V);
+						UVs_inFile.Add(1.0f-V);
 				}
 			}
 			else if (pCurrHeaderElem->name == "multi_texture_face") {
@@ -354,7 +357,7 @@ CStatus CPLY::Execute_Import(string initFilePathName, bool bImportUVs, bool bImp
 				char tx = 0;
 				int tn = 0;
 
-				for (int iProp = 0, iProp_max = pCurrHeaderElem->names.size(); iProp < iProp_max; iProp++) {
+				for (int iProp = 0, iProp_max = (int)pCurrHeaderElem->names.size(); iProp < iProp_max; iProp++) {
 					string& type = pCurrHeaderElem->types[iProp];
 					string& name = pCurrHeaderElem->names[iProp];
 
@@ -376,7 +379,7 @@ CStatus CPLY::Execute_Import(string initFilePathName, bool bImportUVs, bool bImp
 					}
 					else {
 						if (name == "texture_vertex_indices") {
-							listCount = atoi(tokens[next_struct_offset].c_str());
+							listCount = (char)atoi(tokens[next_struct_offset].c_str());
 							next_struct_offset += 1;
 						}
 						else if (name == "tx") {

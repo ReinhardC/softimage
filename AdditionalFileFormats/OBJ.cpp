@@ -330,7 +330,7 @@ CStatus COBJ::Execute_Import(string initFilePathName, bool bImportUVs, bool bImp
 
 
 
-CStatus COBJ::Execute_Export(CRefArray& inObjects, string initFilePathName, bool bExportVertexColors, bool bSeparateFiles, bool bExportLocalCoords)
+CStatus COBJ::Execute_Export(CRefArray& inObjects, string initFilePathName, bool bExportVertexColors, bool bSeparateFiles, bool bWriteMTLFile, bool bExportLocalCoords)
 {
 	XSI::Application app;
 
@@ -339,12 +339,16 @@ CStatus COBJ::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 	if ((m_file = fopen(m_filePathName.c_str(), "wb")) == NULL)
 		return CStatus::Fail;
 
-	if ((m_matfile = fopen((m_filePath + m_fileName + string(".mtl")).c_str(), "wb")) == NULL)
-		return CStatus::Fail;
+	if(bWriteMTLFile)
+		if ((m_matfile = fopen((m_filePath + m_fileName + string(".mtl")).c_str(), "wb")) == NULL)
+			return CStatus::Fail;
 
 	// output header
 	Output(m_file, "# Custom Wavefront OBJ Exporter\r\n");
-	Output(m_file, "\r\nmtllib " + m_fileName + ".mtl\r\n");
+
+	if (bWriteMTLFile)
+		Output(m_file, "\r\nmtllib " + m_fileName + ".mtl\r\n");
+
 	Output(m_file, "\r\no " + m_fileName + "\r\n");
 
 	long fails = 0;	
@@ -367,8 +371,6 @@ CStatus COBJ::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 
 		m_progress.PutCaption("Exporting OBJ (" + xobj.GetName() + ")");
 		m_progress.Increment();
-
-		long tic = 0;
 
 		XSI::CGeometryAccessor ga = mesh.GetGeometryAccessor(XSI::siConstructionModeSecondaryShape, XSI::siCatmullClark, 0);
 
@@ -557,6 +559,7 @@ CStatus COBJ::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 
 			Material material(Materials[iMaterial]);
 
+			// if(bWriteMTLFile) - commented out because usemtl might be used for other purposes
 			Output(m_file, string("usemtl ") + string(material.GetName().GetAsciiString()) + "\r\n");
 
 			string strKa = "Ka 0.0 0.0 0.0\r\n";
@@ -596,7 +599,8 @@ CStatus COBJ::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 				}
 			}
 
-			Output(m_matfile, string("newmtl ") + material.GetName().GetAsciiString() + "\r\n" + strKa + strKd + strKs + strNs + strIllum + "\r\n");
+			if(bWriteMTLFile)
+				Output(m_matfile, string("newmtl ") + material.GetName().GetAsciiString() + "\r\n" + strKa + strKd + strKs + strNs + strIllum + "\r\n");
 
 			long ix = 0;
 
@@ -651,7 +655,9 @@ CStatus COBJ::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 	}
 
 	fclose(m_file);
-	fclose(m_matfile);
+
+	if(bWriteMTLFile)
+		fclose(m_matfile);
 
 	if (fails == 0)
 		return CStatus::OK;

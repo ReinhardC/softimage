@@ -24,8 +24,10 @@ function FileFormatOptions_OnStartup_OnEvent(in_ctxt)
 	if ioPrefs is Nothing then  
 		logmessage "Installing Custom Preferences"
 		set customProperty = ActiveSceneRoot.AddProperty("FileFormatOptions", false, "FileFormatOptions")
+		Application.LogMessage "AdditionalFileFormats plugin: Installing custom preferences"
 		InstallCustomPreferences customProperty, "File Format Options"
 	else
+		Application.LogMessage "AdditionalFileFormats plugin: Refreshing custom preferences"
 		RefreshCustomPreferences 
 	end if
 	FileFormatOptionsOptions_OnStartup_OnEvent = false
@@ -38,17 +40,17 @@ function XSIUnloadPlugin( in_reg )
 	Application.LogMessage strPluginName & " has been unloaded.",siVerbose
 	XSIUnloadPlugin = true
 end function
-
+ 
 function FileFormatOptions_Define( in_ctxt )
 
 	dim oCustomProperty
 	set oCustomProperty = in_ctxt.Source
 	
-	'OBJ
+	'OBJ 
 	call oCustomProperty.AddParameter3( "OBJ_DefaultPath", siString )		
 	call oCustomProperty.AddParameter3( "OBJ_LastUsedPath", siString )
 	call oCustomProperty.AddParameter3( "OBJ_rememberLastUsedPath", siBool, 1, , , false ) 
-	call oCustomProperty.AddParameter3( "OBJ_Format", siInt4, 0, 0, 1, false )	
+	call oCustomProperty.AddParameter3( "OBJ_WriteMTL", siBool, 0, 0, 1, false )	
 	call oCustomProperty.AddParameter3( "OBJ_LocalCoords", siBool, 0, 0, 1, false )	
 	
 	'STL
@@ -75,26 +77,22 @@ function FileFormatOptions_DefineLayout( in_ctxt )
 	 
 	oLayout.Clear 
 	
+
 		
 	oLayout.AddTab "OBJ" 
 		
-	oLayout.AddGroup "Folder"
-		set oItem = oLayout.AddItem( "OBJ_DefaultPath", "Default Path", siControlFolder ) 		
+	oLayout.AddGroup "OBJ Folder"
+		set oItem = oLayout.AddItem( "OBJ_DefaultPath", "Default Path", siControlFolder ) 
 		rem set oItem = oLayout.AddItem( "STL_LastUsedPath", "Last Used Path", siControlFolder ) 
 		set oItem = oLayout.AddItem ("OBJ_rememberLastUsedPath", "Remember Last Used Path")
 	oLayout.EndGroup
 
 	oLayout.AddGroup "Export"
-		oLayout.AddGroup "File Format"
-			set oItem = oLayout.AddEnumControl( "OBJ_Format", _
-				Array("OBJ Format", 0,_
-					 "OBJ2.0 Format", 1 ), "", siControlRadio )
-			call oItem.SetAttribute( siUINoLabel, true )
-			set oItem = oLayout.AddItem( "OBJ_LocalCoords", "Use Local Coordinates")
-			
+		oLayout.AddGroup "File Format"	
+			set oItem = oLayout.AddItem( "OBJ_WriteMTL", "Write MTL File")
+			set oItem = oLayout.AddItem( "OBJ_LocalCoords", "Use Local Coordinates")	
 		oLayout.EndGroup
 	oLayout.EndGroup
-	
 	
 	oLayout.AddTab "STL"	
 	
@@ -118,7 +116,7 @@ function FileFormatOptions_DefineLayout( in_ctxt )
 		
 		oLayout.EndGroup
 	oLayout.EndGroup
-
+	
 		
 	oLayout.AddTab "PLY"	
 	
@@ -201,8 +199,9 @@ function ShowExportOBJFileBrowser( in_ctxt )
 	oFileBrowser.Filter = "Wavefront OBJ Format (*.obj)|*.obj||"
 	oFileBrowser.ShowSave() 
 	bUseLocalCoords = GetValue("preferences.File Format Options.OBJ_LocalCoords")
+	bWriteMTL = GetValue("preferences.File Format Options.OBJ_WriteMTL")
 	if oFileBrowser.FilePathName <> ""  then
-		ExportOBJ Selection, oFileBrowser.FilePathName, , , bUseLocalCoords
+		ExportOBJ Selection, oFileBrowser.FilePathName, , , bWriteMTL, bUseLocalCoords
 		saveInitialDir "OBJ", oFileBrowser.FilePath
 	end if
 
