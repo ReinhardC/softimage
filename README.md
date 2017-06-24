@@ -17,6 +17,7 @@ features
 installation instructions:
 ---------------------
 * drag and drop xsiaddon files from project release section into application
+* when reinstalling it may be neccessary to delete the custom pref file "C:\Users\[your_username]\Autodesk\Softimage_2015_R2-SP2\Data\Preferences\File Format Options.Preset" 
 
 build instructions:
 -------------------------
