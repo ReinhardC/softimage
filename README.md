@@ -5,13 +5,14 @@ please report any issues!
 github repository so far has only 1 project in it:
 
 * *"Additional File Formats"*
+  this project was started because of factory OBJ export performance issues with large meshes
 
 features
 -------------------------
 * STL export 
 * STL import
-* OBJ import (with vertex color/UV/weightmap support)
-* OBJ export (higher speed/with vertex color/UV/weightmap support)
+* OBJ import (vertex color/UV/weightmap support)
+* OBJ export (vertex color/UV/weightmap support)
 * experimental PLY import (vertex color/UV support)
 
 installation instructions:
