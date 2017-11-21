@@ -1,1 +1,2 @@
 Version 2.0 - improved obj export speed, fixes progress bar
+Version 2.1 - fixes 1 off error reading obj

@@ -65,7 +65,7 @@ CStatus COBJ::Execute_Import(string initFilePathName, bool bImportUVs, bool bImp
 	long modeCount2 = 0, modeCount3 = 0, modeCount4 = 0;
 	long ixLineInFile = 0;
 	do {
-		if (!fgets(pbuf, max_line_length-1, m_file))
+		if (!fgets(pbuf, max_line_length, m_file))
 			break;
 
 		string stdLine(pbuf);
