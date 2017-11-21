@@ -34,17 +34,25 @@ CStatus COBJ::Execute_Import(string initFilePathName, bool bImportUVs, bool bImp
 	if ((m_file = fopen(m_filePathName.c_str(), "rb")) == NULL)
 		return CStatus::Fail;
 
-	int ch, number_of_lines = 0;
+	int ch, number_of_lines = 0, cur_line_length = 0, max_line_length = -1, max_line_length_line = 0;
 	while (EOF != (ch = getc(m_file)))
-		if ('\n' == ch)
+		if ('\n' == ch) {			
+			if (cur_line_length > max_line_length) {
+				max_line_length = cur_line_length;
+				max_line_length_line = number_of_lines;
+			}
+			cur_line_length = 0;
 			++number_of_lines;
+		}
+		else
+			cur_line_length++;
 
-	m_progress.PutMaximum(number_of_lines);
+	m_progress.PutMaximum(number_of_lines/1000);
 
 	fseek(m_file, 0L, 0);
 
-	char buf[32001];
-	buf[32000] = '\0';
+	char* pbuf = (char*)malloc(max_line_length);
+	*(pbuf + max_line_length - 1) = '\0';
 
 	CDoubleArray PP_inFile;
 	CFloatArray UVs_inFile, MRGB_inFile, Normals_inFile;
@@ -57,17 +65,19 @@ CStatus COBJ::Execute_Import(string initFilePathName, bool bImportUVs, bool bImp
 	long modeCount2 = 0, modeCount3 = 0, modeCount4 = 0;
 	long ixLineInFile = 0;
 	do {
-		if (!fgets(buf, 32000, m_file))
+		if (!fgets(pbuf, max_line_length-1, m_file))
 			break;
 
-		string stdLine(buf);
+		string stdLine(pbuf);
 		trim(stdLine);  
 		std::vector<std::string> tokens = split(stdLine, ' ');
 
 		size_t nbTokens = tokens.size();
-		if(nbTokens == 0)
+		if (nbTokens == 0) {
+			ixLineInFile++;
 			continue;
-
+		}
+			
 		if (tokens[0] == "#MRGB") {
 			bHasPolypaint = true;
 			if (impCurrentMode != 1) {
@@ -222,10 +232,10 @@ CStatus COBJ::Execute_Import(string initFilePathName, bool bImportUVs, bool bImp
 		else if (tokens[0] == "usemtl") {
 			// TODO new mtl assign4
 		} 
-
+		 
 		ixLineInFile++;
 		if (ixLineInFile % 100000 == 0) { // increment progress bar
-			m_progress.Increment(100000);
+			m_progress.Increment(100);
 			if (m_progress.IsCancelPressed()) {
 				for (auto p : object_map) delete(p.second);
 				return CStatus::False;
