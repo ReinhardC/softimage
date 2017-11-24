@@ -51,7 +51,9 @@ function FileFormatOptions_Define( in_ctxt )
 	call oCustomProperty.AddParameter3( "OBJ_LastUsedPath", siString )
 	call oCustomProperty.AddParameter3( "OBJ_rememberLastUsedPath", siBool, 1, , , false ) 
 	call oCustomProperty.AddParameter3( "OBJ_WriteMTL", siBool, 0, 0, 1, false )	
-	call oCustomProperty.AddParameter3( "OBJ_LocalCoords", siBool, 0, 0, 1, false )	
+	call oCustomProperty.AddParameter3( "OBJ_LocalCoords", siBool, 0, 0, 1, false )
+	call oCustomProperty.AddParameter3( "OBJ_CreateObjectsTag", siInt4, 0, 0, 3, false )
+	call oCustomProperty.AddParameter3( "OBJ_CreateClustersTag", siInt4, 2, 0, 3, false )
 	
 	'STL
 	call oCustomProperty.AddParameter3( "STL_DefaultPath", siString )		
@@ -87,11 +89,16 @@ function FileFormatOptions_DefineLayout( in_ctxt )
 		set oItem = oLayout.AddItem ("OBJ_rememberLastUsedPath", "Remember Last Used Path")
 	oLayout.EndGroup
 
-	oLayout.AddGroup "Export"
-		oLayout.AddGroup "File Format"	
-			set oItem = oLayout.AddItem( "OBJ_WriteMTL", "Write MTL File")
-			set oItem = oLayout.AddItem( "OBJ_LocalCoords", "Use Local Coordinates")	
-		oLayout.EndGroup
+	oLayout.AddGroup "OBJ Export"
+		set oItem = oLayout.AddItem( "OBJ_WriteMTL", "Write MTL File")
+		set oItem = oLayout.AddItem( "OBJ_LocalCoords", "Use Local Coordinates")			
+	oLayout.EndGroup
+	
+	oLayout.AddGroup "OBJ Import (warning: some combinations don't make sense)"
+		aComboItems = Array("for each G tag (default)", 0, "for each O tag", 1, "for each USEMTL tag", 2, "Create a Single Object", 3)
+		set oItem = oLayout.AddEnumControl("OBJ_CreateObjectsTag", aComboItems, "Create an Object")
+		aComboItems = Array("for each G tag", 0, "for each O tag", 1, "for each USEMTL tag (default)", 2, "Do not create Clusters", 3)
+		set oItem = oLayout.AddEnumControl("OBJ_CreateClustersTag", aComboItems, "Create a Cluster")		
 	oLayout.EndGroup
 	
 	oLayout.AddTab "STL"	
@@ -145,7 +152,7 @@ function FileFormatOptions_DefineLayout( in_ctxt )
     oLayout.SetAttribute siUIHelpFile, "<FactoryPath>/Doc/<DocLangPref>/xsidocs.chm::/menubar14.htm"
 	
 	FileFormatOptions_DefineLayout = true
-end function 
+end function  
 
 function FileFormatOptions_OnInit( )	
 	FileFormatOptions_ObjImport_rememberLastUsedPath_OnChanged

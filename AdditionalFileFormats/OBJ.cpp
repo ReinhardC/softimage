@@ -2,31 +2,67 @@
 
 #define log app.LogMessage
 
-class ObjectDescription {
+class MeshData {
 public:
-	ObjectDescription(string name) { this->name = name; }
+	MeshData(string name) { this->name = name; }
+
 	string name;
-	long nbPoints, pointOffset;
-	unordered_map<long, long> ixPP_lookup;
-	long ixPP_next = 0;
-	CDoubleArray PP;
+
+	CLongArray Counts; // polygons
+
+	CDoubleArray PointPosition; // positions
+	CLongArray IcsPointPosition; // points
+	long ixPointPosition_next = 0;
+	unordered_map<long, long> ixPointPosition_lookup;
+	
+	unordered_map<string, CLongArray> IcsMaterialClusters;
+
+	bool bHasNormals = false;
 	CFloatArray Normals;
-	CFloatArray RGBA;
+
+	bool bHasUVs = false;
 	CFloatArray UVs;
-	CFloatArray Mask;
-	CLongArray PP_Ics;
-	CLongArray Counts;
+
+	bool bHasPolypaint = false;
+	CFloatArray RGBA;
+	CFloatArray Mask; 
 };
 
 CStatus COBJ::Execute_Import(string initFilePathName, bool bImportUVs, bool bImportUserNormals, bool bImportMask, bool bImportPolypaint)
 {
-	CFileFormat::initStrings(initFilePathName);
-
 	Application app;
+	
+	CValue prefs_CreateObjectsTag;
+	app.GetPreferences().GetPreferenceValue(L"File Format Options.OBJ_CreateObjectsTag", prefs_CreateObjectsTag);
+	CValue prefs_CreateClustersTag;
+	app.GetPreferences().GetPreferenceValue(L"File Format Options.OBJ_CreateClustersTag", prefs_CreateClustersTag);
+
+	string new_object_tag = "g"; // use auto object
+	string new_cluster_tag = "usemtl";
+
+	switch ((int)prefs_CreateObjectsTag) {
+		case 0: new_object_tag = "g"; break;
+		case 1: new_object_tag = "o"; break;
+		case 2: new_object_tag = "usemtl"; break;
+		case 3: new_object_tag = "_____"; break;
+	}
+
+	switch ((int)prefs_CreateClustersTag) {
+		case 0: new_cluster_tag = "g"; break;
+		case 1: new_cluster_tag = "o"; break;
+		case 2: new_cluster_tag = "usemtl"; break;
+		case 3: new_cluster_tag = "_____"; break;
+	}
+
 	Model root = app.GetActiveSceneRoot();
 
-	m_progress.PutVisible(true);
-	m_progress.PutCaption("Importing OBJ Data");
+	MeshData* pCurrentMesh = NULL;
+	CLongArray* pCurrentMatCluster = NULL;
+	string strCurrentMatName;
+
+	unordered_map<string, MeshData*> mesh_map;
+
+	CFileFormat::initStrings(initFilePathName);
 
 	// for computing mesh auto scale (1, 0.1 or 0.01)
 	double lfExtentX, lfMaxExtentX = -DBL_MAX, lfMinExtentX = DBL_MAX;
@@ -34,20 +70,89 @@ CStatus COBJ::Execute_Import(string initFilePathName, bool bImportUVs, bool bImp
 	if ((m_file = fopen(m_filePathName.c_str(), "rb")) == NULL)
 		return CStatus::Fail;
 
-	int ch, number_of_lines = 0, cur_line_length = 0, max_line_length = -1, max_line_length_line = 0;
-	while (EOF != (ch = getc(m_file)))
-		if ('\n' == ch) {			
-			if (cur_line_length > max_line_length) {
-				max_line_length = cur_line_length;
-				max_line_length_line = number_of_lines;
+	// collect stats
+	fseek(m_file, 0L, SEEK_END);
+	m_progress.PutCaption("Importing OBJ (Scanning File for Objects)");
+	m_progress.PutMaximum(ftell(m_file) / 10000);
+	m_progress.PutVisible(true);
+	rewind(m_file);
+
+	char c, strLine[80];
+	long pos_in_file = 0;
+	int pos_in_line = 0;
+	int line_in_file = 0;	
+	int max_line_length = -1;
+
+	while (EOF != (c = getc(m_file))) {
+
+		if (pos_in_line < 79)
+			strLine[pos_in_line] = c;
+
+		if (pos_in_file % 10000 == 0)
+			m_progress.Increment(1);
+
+		if (pos_in_line >= 2 && ((c == '\n' && pos_in_line < 78) || pos_in_line == 78))
+		{
+			// early opt outs (speed opt)
+			char c1 = strLine[0], c2 = strLine[1];
+			if (!(c1 == 'f' || // ignore faces
+				(c1 == 'v' && c2 == ' ' && pCurrentMesh) || // ignore vertices if we have a mesh
+				(c1 == 'v' && c2 == 'n' && pCurrentMesh && pCurrentMesh->bHasNormals) || // ignore normals if we already found normals for the current mesh
+				(c1 == 'v' && c2 == 't' && pCurrentMesh && pCurrentMesh->bHasUVs) // ignore uvs if we already found uvs for the current mesh
+				))
+			{
+				strLine[pos_in_line + 1] = '\0';
+				string stdLine(strLine);
+				trim(stdLine);
+				std::vector<std::string> tokens = split(stdLine, ' ');
+
+				size_t nbTokens = tokens.size();
+				string& firstToken = tokens[0];
+				if (nbTokens == 2 && firstToken == new_object_tag) {
+					string name(tokens[1]);
+					if (mesh_map.count(name) == 0) {
+						pCurrentMesh = new MeshData(name);
+						mesh_map.insert({ name, pCurrentMesh });
+					}
+					else {
+						pCurrentMesh = mesh_map[name];
+					}
+				}
+				else if (nbTokens != 0 && (firstToken == "v" || firstToken == "vt" || firstToken == "vn")) {
+					if (!pCurrentMesh) {
+						string name(m_fileName);
+						pCurrentMesh = new MeshData(name);
+						mesh_map.insert({ name, pCurrentMesh });
+					}
+					if (firstToken == "vt")
+						pCurrentMesh->bHasUVs = true;
+					else if (firstToken == "vn")
+						pCurrentMesh->bHasNormals = true;								
+				}
+				else if (nbTokens != 0 && firstToken == "#MRGB")
+					pCurrentMesh->bHasPolypaint = true;
 			}
-			cur_line_length = 0;
-			++number_of_lines;
+		}
+
+		if (c == '\n') 
+		{
+			if (pos_in_line > max_line_length) 
+				max_line_length = pos_in_line;
+
+			pos_in_line = 0;
+			++line_in_file;
 		}
 		else
-			cur_line_length++;
+			pos_in_line++;
 
-	m_progress.PutMaximum(number_of_lines/1000);
+		pos_in_file++;
+	}
+	//stats done.
+
+	pCurrentMesh = NULL;
+
+	m_progress.PutValue(0);
+	m_progress.PutMaximum(line_in_file / 1000);
 
 	fseek(m_file, 0L, 0);
 
@@ -57,288 +162,290 @@ CStatus COBJ::Execute_Import(string initFilePathName, bool bImportUVs, bool bImp
 	CDoubleArray PP_inFile;
 	CFloatArray UVs_inFile, MRGB_inFile, Normals_inFile;
 
-	unordered_map<string, ObjectDescription*> object_map;
-	ObjectDescription* pObj = NULL;
-
-	bool bHasPolypaint = false, bHasNormals = false, bHasUVs = false;
-	long impCurrentMode = 0;
-	long modeCount2 = 0, modeCount3 = 0, modeCount4 = 0;
-	long ixLineInFile = 0;
+	long current_action_id = 0; // inactve
+	long nbModeSwitches2 = 0, nbModeSwitches3 = 0, nbModeSwitches4 = 0, nbModeSwitches5 = 0, nbModeSwitches6 = 0;
+	line_in_file = 0;
 	do {
 		if (!fgets(pbuf, max_line_length, m_file))
 			break;
 
 		string stdLine(pbuf);
-		trim(stdLine);  
+		trim(stdLine);
 		std::vector<std::string> tokens = split(stdLine, ' ');
 
 		size_t nbTokens = tokens.size();
-		if (nbTokens == 0) {
-			ixLineInFile++;
+		if (nbTokens < 2) {
+			line_in_file++;
 			continue;
 		}
+
+		string& firstToken = tokens[0];
+		string& secondToken = tokens[1];
+		if (firstToken == new_object_tag)
+		{
+			string name(secondToken);
+			if (mesh_map.count(name) == 0) {
+				app.LogMessage("Error: Object '" + CString(secondToken.c_str()) + "' found during Scan not found anymore", siErrorMsg);
+				return CStatus::Fail;
+			}
+
+			pCurrentMesh = mesh_map[name];
+		}
+		else if (firstToken == new_cluster_tag || firstToken == "v" || firstToken == "vt" || firstToken == "vn") {
+			if (!pCurrentMesh) {
+				string name(m_fileName);
+				if (mesh_map.count(name) == 0) {
+					app.LogMessage("Error: Object '" + CString(secondToken.c_str()) + "' found during Scan not found anymore", siErrorMsg);
+					return CStatus::Fail;
+				}
+				pCurrentMesh = mesh_map[name];
+			}
 			
-		if (tokens[0] == "#MRGB") {
-			bHasPolypaint = true;
-			if (impCurrentMode != 1) {
-				impCurrentMode = 1;
-				if(pObj == NULL)
-					m_progress.PutCaption("Importing OBJ (Vertex Colors and Weights)");
+			if (firstToken == new_cluster_tag) { 
+				if (strCurrentMatName != secondToken) {
+					strCurrentMatName = secondToken;
+					if (pCurrentMesh->IcsMaterialClusters.count(strCurrentMatName) == 0) {
+						pCurrentMesh->IcsMaterialClusters.insert({ strCurrentMatName, CLongArray() });
+					}
+					pCurrentMatCluster = &pCurrentMesh->IcsMaterialClusters.at(strCurrentMatName);
+				}
+			}
+			else if (firstToken == "v") {
+				assert(nbTokens == 4);
+				if (current_action_id != 2) {
+					current_action_id = 2;
+					nbModeSwitches2++;
+					if (nbModeSwitches2 < 20)
+						m_progress.PutCaption("Importing OBJ (Vertex Positions of '" + CString(pCurrentMesh->name.c_str()) + "')");
+				}
+
+				float x = (float)atof(secondToken.c_str());
+
+				PP_inFile.Add(x);
+				PP_inFile.Add((float)atof(tokens[2].c_str()));
+				PP_inFile.Add((float)atof(tokens[3].c_str()));
+
+				if (x > lfMaxExtentX) // for auto scale
+					lfMaxExtentX = x;
+
+				if (x < lfMinExtentX) // for auto scale
+					lfMinExtentX = x;
+
+			}
+			else if (firstToken == "vt") {
+				assert(nbTokens >= 3 && nbTokens <= 4);
+				assert(pCurrentMesh->bHasUVs == true);
+				if (current_action_id != 3) {
+					current_action_id = 3;
+					nbModeSwitches3++;
+					if (nbModeSwitches3 < 20)
+						m_progress.PutCaption("Importing OBJ (Texture Coordinates of '" + CString(pCurrentMesh->name.c_str()) + "')");
+				}
+
+				UVs_inFile.Add((float)atof(secondToken.c_str()));
+				UVs_inFile.Add((float)atof(tokens[2].c_str()));
+				if (tokens.size() > 3)
+					UVs_inFile.Add((float)atof(tokens[3].c_str()));
 				else
-					m_progress.PutCaption("Importing OBJ (Vertex Colors and Weights of '" + CString(pObj->name.c_str()) + "')");
+					UVs_inFile.Add(0.0);
 			}
-
-			for (size_t i = 0, i_max = tokens[1].size() / 8; i < i_max; i++)
-			{
-				size_t o = 8 * i;
-				MRGB_inFile.Add(1.0f - (16.0f * hex2dec(tokens[1][o]) + hex2dec(tokens[1][o + 1])) / 255.0f);
-				MRGB_inFile.Add((16.0f * hex2dec(tokens[1][o + 2]) + hex2dec(tokens[1][o + 3])) / 255.0f);
-				MRGB_inFile.Add((16.0f * hex2dec(tokens[1][o + 4]) + hex2dec(tokens[1][o + 5])) / 255.0f);
-				MRGB_inFile.Add((16.0f * hex2dec(tokens[1][o + 6]) + hex2dec(tokens[1][o + 7])) / 255.0f);
-			}
-		}
-		else if (tokens[0] == "v") {
-			if (impCurrentMode != 2) {				
-				impCurrentMode = 2;
-				modeCount2++;
-				if (modeCount2 < 20) {
-					if (pObj == NULL)
-						m_progress.PutCaption("Importing OBJ (Vertex Positions)");
-					else
-						m_progress.PutCaption("Importing OBJ (Vertex Positions of '" + CString(pObj->name.c_str()) + "')");
+			else if (firstToken == "vn") {
+				assert(nbTokens == 4);
+				assert(pCurrentMesh->bHasNormals == true);
+				if (current_action_id != 4) {
+					current_action_id = 4;
+					nbModeSwitches4++;
+					if (nbModeSwitches4 < 20)
+						m_progress.PutCaption("Importing OBJ (Normals of '" + CString(pCurrentMesh->name.c_str()) + "')");
 				}
+
+				Normals_inFile.Add((float)atof(secondToken.c_str()));
+				Normals_inFile.Add((float)atof(tokens[2].c_str()));
+				Normals_inFile.Add((float)atof(tokens[3].c_str()));
 			}
-
-			float x = (float)atof(tokens[1].c_str()); 
-			
-			PP_inFile.Add(x);
-			PP_inFile.Add((float)atof(tokens[2].c_str()));
-			PP_inFile.Add((float)atof(tokens[3].c_str()));
-
-			if (x > lfMaxExtentX) // for auto scale
-				lfMaxExtentX = x;
-
-			if (x < lfMinExtentX) // for auto scale
-				lfMinExtentX = x;
-
 		}
-		else if (tokens[0] == "vt") {
-			bHasUVs = true;
-			if (impCurrentMode != 3) {
-				impCurrentMode = 3;
-				modeCount3++;
-				if (modeCount3 < 20) {
-					if (pObj == NULL)
-						m_progress.PutCaption("Importing OBJ (Texture Coordinates)");
-					else
-						m_progress.PutCaption("Importing OBJ (Texture Coordinates of '" + CString(pObj->name.c_str()) + "')");
-				}
+		else if (firstToken == "f")
+		{
+			assert(nbTokens > 3);
+			if (current_action_id != 5) {
+				current_action_id = 5;
+				nbModeSwitches5++;
+				if (nbModeSwitches5 < 20)										
+					m_progress.PutCaption("Importing OBJ (Polygons of '" + CString(pCurrentMesh->name.c_str()) + "')");
 			}
 
-			UVs_inFile.Add((float)atof(tokens[1].c_str()));
-			UVs_inFile.Add((float)atof(tokens[2].c_str()));
-			if(tokens.size() > 3)
-				UVs_inFile.Add((float)atof(tokens[3].c_str()));
-			else
-				UVs_inFile.Add(0.0);
-		}
-		else if (tokens[0] == "vn") {
-			bHasNormals = true;
-			if (impCurrentMode != 4) {
-				impCurrentMode = 4; 
-				modeCount4++;
-				if (modeCount4 < 20) {
-					if (pObj == NULL)
-						m_progress.PutCaption("Importing OBJ (Normals)");
-					else
-						m_progress.PutCaption("Importing OBJ (Normals of '" + CString(pObj->name.c_str()) + "')");
-				}
-			}
-			
-			Normals_inFile.Add((float)atof(tokens[1].c_str()));
-			Normals_inFile.Add((float)atof(tokens[2].c_str()));
-			Normals_inFile.Add((float)atof(tokens[3].c_str()));
-		}
-		else if (tokens[0] == "f") {
-			if (impCurrentMode != 5) {
-				impCurrentMode = 5;
-				if (pObj == NULL)
-					m_progress.PutCaption("Importing OBJ (Polygons)");
-				else
-					m_progress.PutCaption("Importing OBJ (Polygons of '" + CString(pObj->name.c_str()) + "')");
-			}
-
-			string name(m_fileName);
-			if (pObj == NULL) {
-				pObj = new ObjectDescription(name);
-				object_map.insert({ name, pObj });
-			}
+			if (pCurrentMatCluster)
+				pCurrentMatCluster->Add(pCurrentMesh->Counts.GetCount()); // add current polygon index to material cluster
 
 			size_t nbPolypoints = nbTokens - 1;
 			for (int i = 1; i <= nbPolypoints; i++) {
 
-				std::vector<std::string> triple = split(tokens[i], '/'); // PointIndex/UVIndex/NormalIndex
+				std::vector<std::string> triple = split(tokens[i], '/'); 
 
-				long ixPP_inFile = atol(triple[0].c_str()) - 1;
-				long ixPP;
-				if (pObj->ixPP_lookup.count(ixPP_inFile) == 0) {
-					ixPP = pObj->ixPP_next;
-					pObj->ixPP_lookup.insert({ ixPP_inFile, pObj->ixPP_next++ });
-					pObj->PP.Add(PP_inFile[3 * ixPP_inFile]);
-					pObj->PP.Add(PP_inFile[3 * ixPP_inFile + 1]);
-					pObj->PP.Add(PP_inFile[3 * ixPP_inFile + 2]);
-					if (bHasPolypaint) 
-						pObj->Mask.Add(MRGB_inFile[4 * ixPP_inFile]);
-				}
-				else {					
-					ixPP = pObj->ixPP_lookup[ixPP_inFile];
-				}
-								
-				pObj->PP_Ics.Add(ixPP);
+				// ** Triple format: **********
+				// **
+				// ** PointIndex / UVIndex / NormalIndex
 
-				if (bHasUVs && triple[1] != "") {
-					int ixUV_inFile = atoi(triple[1].c_str()) - 1;
-					pObj->UVs.Add(UVs_inFile[3 * ixUV_inFile]);
-					pObj->UVs.Add(UVs_inFile[3 * ixUV_inFile + 1]);
-					pObj->UVs.Add(UVs_inFile[3 * ixUV_inFile + 2]);
+				size_t nbTripleEls = triple.size();				
+
+				long ixPointPosition_inFile = atol(triple[0].c_str()) - 1;
+				long ixPointPosition;
+				if (pCurrentMesh->ixPointPosition_lookup.count(ixPointPosition_inFile) == 0) {
+					ixPointPosition = pCurrentMesh->ixPointPosition_next;
+					pCurrentMesh->ixPointPosition_lookup.insert({ ixPointPosition_inFile, pCurrentMesh->ixPointPosition_next++ });
+					pCurrentMesh->PointPosition.Add(PP_inFile[3 * ixPointPosition_inFile]);
+					pCurrentMesh->PointPosition.Add(PP_inFile[3 * ixPointPosition_inFile + 1]);
+					pCurrentMesh->PointPosition.Add(PP_inFile[3 * ixPointPosition_inFile + 2]);
+					if (pCurrentMesh->bHasPolypaint)
+						pCurrentMesh->Mask.Add(MRGB_inFile[4 * ixPointPosition_inFile]);
+				}
+				else 
+					ixPointPosition = pCurrentMesh->ixPointPosition_lookup[ixPointPosition_inFile];
+	
+				pCurrentMesh->IcsPointPosition.Add(ixPointPosition);
+
+				if (pCurrentMesh->bHasUVs) {
+					if (nbTripleEls > 1 && triple[1] != "") {
+						int ixUV_inFile = atoi(triple[1].c_str()) - 1;
+						pCurrentMesh->UVs.Add(UVs_inFile[3 * ixUV_inFile]);
+						pCurrentMesh->UVs.Add(UVs_inFile[3 * ixUV_inFile + 1]);
+						pCurrentMesh->UVs.Add(UVs_inFile[3 * ixUV_inFile + 2]);
+					}
+					else {						
+						double u = ((double)rand() / (RAND_MAX)) / 10000; //bug workaround: uvs on 0 can lead to crashes in subdivision.dll for some topologies...
+						double v = ((double)rand() / (RAND_MAX)) / 10000;
+						pCurrentMesh->UVs.Add(u);
+						pCurrentMesh->UVs.Add(v);
+						pCurrentMesh->UVs.Add(0.0f);
+					}
 				}
 
-				if (bHasNormals && triple[2] != "") {
-					int ixNormal_inFile = atoi(triple[2].c_str()) - 1;
-					pObj->Normals.Add(Normals_inFile[3 * ixNormal_inFile]);
-					pObj->Normals.Add(Normals_inFile[3 * ixNormal_inFile + 1]);
-					pObj->Normals.Add(Normals_inFile[3 * ixNormal_inFile + 2]);
+				if (pCurrentMesh->bHasNormals) {
+					if (nbTripleEls > 2 && triple[2] != "") {
+						int ixNormal_inFile = atoi(triple[2].c_str()) - 1;
+						pCurrentMesh->Normals.Add(Normals_inFile[3 * ixNormal_inFile]);
+						pCurrentMesh->Normals.Add(Normals_inFile[3 * ixNormal_inFile + 1]);
+						pCurrentMesh->Normals.Add(Normals_inFile[3 * ixNormal_inFile + 2]);
+					}
+					else {
+						pCurrentMesh->Normals.Add(0.0); //TODO: to be be replaced by actual normal later on
+						pCurrentMesh->Normals.Add(0.0);
+						pCurrentMesh->Normals.Add(0.0);						
+					}
 				}
 
-				if (bHasPolypaint) {
-					pObj->RGBA.Add(MRGB_inFile[4 * ixPP_inFile + 1]);
-					pObj->RGBA.Add(MRGB_inFile[4 * ixPP_inFile + 2]);
-					pObj->RGBA.Add(MRGB_inFile[4 * ixPP_inFile + 3]);
-					pObj->RGBA.Add(255.0);					
+				if (pCurrentMesh->bHasPolypaint) {
+					pCurrentMesh->RGBA.Add(MRGB_inFile[4 * ixPointPosition_inFile + 1]);
+					pCurrentMesh->RGBA.Add(MRGB_inFile[4 * ixPointPosition_inFile + 2]);
+					pCurrentMesh->RGBA.Add(MRGB_inFile[4 * ixPointPosition_inFile + 3]);
+					pCurrentMesh->RGBA.Add(255.0);
 				}
 			}
-			pObj->Counts.Add((LONG)nbPolypoints);
+			pCurrentMesh->Counts.Add((LONG)nbPolypoints);
 		}
-		else if (tokens[0] == "g") {
-			string name(tokens[1]);
-			if (object_map.count(name) == 0) {
-				pObj = new ObjectDescription(name);
-				object_map.insert({ name, pObj });
+		else if (firstToken == "#MRGB")
+		{
+			assert(pCurrentMesh->bHasPolypaint == true);
+			if (current_action_id != 6) {
+				current_action_id = 6;
+				nbModeSwitches6++;
+				if (nbModeSwitches6 < 20)
+					m_progress.PutCaption("Importing OBJ (Vertex Colors and Weights of '" + CString(pCurrentMesh->name.c_str()) + "')");
 			}
-			else {
-				pObj = object_map[name];
+
+			for (size_t i = 0, i_max = secondToken.size() / 8; i < i_max; i++)
+			{
+				size_t o = 8 * i;
+				MRGB_inFile.Add(1.0f - (16.0f * hex2dec(secondToken[o]) + hex2dec(secondToken[o + 1])) / 255.0f);
+				MRGB_inFile.Add((16.0f * hex2dec(secondToken[o + 2]) + hex2dec(secondToken[o + 3])) / 255.0f);
+				MRGB_inFile.Add((16.0f * hex2dec(secondToken[o + 4]) + hex2dec(secondToken[o + 5])) / 255.0f);
+				MRGB_inFile.Add((16.0f * hex2dec(secondToken[o + 6]) + hex2dec(secondToken[o + 7])) / 255.0f);
 			}
 		}
-		else if (tokens[0] == "usemtl") {
-			// TODO new mtl assign4
-		} 
-		 
-		ixLineInFile++;
-		if (ixLineInFile % 100000 == 0) { // increment progress bar
-			m_progress.Increment(100);
+
+		line_in_file++;
+		if (line_in_file % 1000 == 0) { // increment progress bar
+			m_progress.Increment(1);
 			if (m_progress.IsCancelPressed()) {
-				for (auto p : object_map) delete(p.second);
+				for (auto p : mesh_map) delete(p.second);
 				return CStatus::False;
 			}
 		}
 	} while (!feof(m_file));
 
 	lfExtentX = lfMaxExtentX - lfMinExtentX; // for auto scale
-
-	// auto scale meshes
-	MATH::CVector3 vAutoScaling(1.0, 1.0, 1.0);
+											 
+	MATH::CVector3 vAutoScaling(1.0, 1.0, 1.0); // auto scale meshes
 	if (lfExtentX >= 55)
 		vAutoScaling.Set(0.1, 0.1, 0.1);
 	if (lfExtentX >= 150)
 		vAutoScaling.Set(0.01, 0.01, 0.01);
-	//m_progress.PutVisible(false);
-	int ix = 0; 
-	for (auto p : object_map) {
 
-		ObjectDescription* pCurrentObj = p.second;
-		
-		m_progress.PutCaption("Importing OBJ (Building Mesh "+CString(++ix)+" of "+CString(object_map.size())+")");
+	int ix = 0;
+	for (auto p : mesh_map) {
+
+		pCurrentMesh = p.second;
+
+		m_progress.PutCaption("Importing OBJ (Building Mesh " + CString(++ix) + " of " + CString(mesh_map.size()) + ")");
+
+		if (pCurrentMesh->Counts.GetCount() == 0)
+			continue;
 
 		// use empty mesh to create the imported mesh
 		X3DObject xobj;
-		root.AddPrimitive("EmptyPolygonMesh", CString(pCurrentObj->name.c_str()), xobj); //  CString(m_fileName.c_str()), xobj);
-
-		// get a mesh builder from the newly created geometry
+		root.AddPrimitive("EmptyPolygonMesh", CString(pCurrentMesh->name.c_str()), xobj); //  CString(m_fileName.c_str()), xobj);
+					
 		Primitive prim = xobj.GetActivePrimitive();
 		PolygonMesh mesh = prim.GetGeometry();
 		xobj.PutLocalScaling(vAutoScaling);
 
 		CMeshBuilder meshBuilder = mesh.GetMeshBuilder();
-		
-		meshBuilder.AddVertices(pCurrentObj->PP.GetCount() / 3, pCurrentObj->PP.GetArray());
-		meshBuilder.AddPolygons(pCurrentObj->Counts.GetCount(), pCurrentObj->Counts.GetArray(), pCurrentObj->PP_Ics.GetArray());
-		
+
+		meshBuilder.AddVertices(pCurrentMesh->PointPosition.GetCount() / 3, pCurrentMesh->PointPosition.GetArray());
+		meshBuilder.AddPolygons(pCurrentMesh->Counts.GetCount(), pCurrentMesh->Counts.GetArray(), pCurrentMesh->IcsPointPosition.GetArray());
+
 		// build mesh
 
 		CMeshBuilder::CErrorDescriptor err = meshBuilder.Build(true);
 		if (err != CStatus::OK)
 			app.LogMessage("Error building the mesh: " + err.GetDescription());
-	
+
+		for (auto currentMaterial : pCurrentMesh->IcsMaterialClusters) {
+			Cluster cls;
+			mesh.AddCluster(siPolygonCluster, CString(currentMaterial.first.c_str()), currentMaterial.second, cls);
+		}
+
 		CClusterPropertyBuilder cpBuilder = mesh.GetClusterPropertyBuilder();
-		
-		if (pCurrentObj->UVs.GetCount() > 0) {
+
+		if (pCurrentMesh->bHasUVs && pCurrentMesh->UVs.GetCount() > 0) {
 			ClusterProperty uv = cpBuilder.AddUV();
-			uv.SetValues(pCurrentObj->UVs.GetArray(), pCurrentObj->UVs.GetCount() / 3);
+			uv.SetValues(pCurrentMesh->UVs.GetArray(), pCurrentMesh->UVs.GetCount() / 3);
 		}
 
-		if (bImportPolypaint && bHasPolypaint) {
+		if (bImportPolypaint && pCurrentMesh->bHasPolypaint) {
 			ClusterProperty rgb = cpBuilder.AddVertexColor(CString("PolyPaint"), CString("Vertex_Colors"));
-			rgb.SetValues(pCurrentObj->RGBA.GetArray(), pCurrentObj->RGBA.GetCount() / 4);
-		}
-		
-		if (bImportMask && bHasPolypaint) {
-			ClusterProperty weights = cpBuilder.AddWeightMap(CString("Mask"), CString("WeightMapCls"));
-			weights.SetValues(pCurrentObj->Mask.GetArray(), pCurrentObj->Mask.GetCount());
+			rgb.SetValues(pCurrentMesh->RGBA.GetArray(), pCurrentMesh->RGBA.GetCount() / 4);
 		}
 
-		if (bImportUserNormals && bHasNormals) {
+		if (bImportMask && pCurrentMesh->bHasPolypaint) {
+			ClusterProperty weights = cpBuilder.AddWeightMap(CString("Mask"), CString("WeightMapCls"));
+			weights.SetValues(pCurrentMesh->Mask.GetArray(), pCurrentMesh->Mask.GetCount());
+		}
+
+		if (bImportUserNormals && pCurrentMesh->bHasNormals) {
 			ClusterProperty normals = cpBuilder.AddUserNormal();
-			normals.SetValues(pCurrentObj->Normals.GetArray(), pCurrentObj->Normals.GetCount() / 3);
+			normals.SetValues(pCurrentMesh->Normals.GetArray(), pCurrentMesh->Normals.GetCount() / 3);
 		}
 	}
-	
-	for (auto p : object_map) delete(p.second);
+
+	for (auto p : mesh_map) delete(p.second);
 
 	m_progress.PutVisible(false);
-	
+
 	fclose(m_file);
 
 	return CStatus::OK;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 CStatus COBJ::Execute_Export(CRefArray& inObjects, string initFilePathName, bool bExportVertexColors, bool bSeparateFiles, bool bWriteMTLFile, bool bExportLocalCoords)
 {
@@ -349,7 +456,7 @@ CStatus COBJ::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 	if ((m_file = fopen(m_filePathName.c_str(), "wb")) == NULL)
 		return CStatus::Fail;
 
-	if(bWriteMTLFile)
+	if (bWriteMTLFile)
 		if ((m_matfile = fopen((m_filePath + m_fileName + string(".mtl")).c_str(), "wb")) == NULL)
 			return CStatus::Fail;
 
@@ -361,8 +468,8 @@ CStatus COBJ::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 
 	Output(m_file, "\r\no " + m_fileName + "\r\n");
 
-	long fails = 0;	
-	
+	long fails = 0;
+
 	m_progress.PutVisible(true);
 	m_progress.PutMaximum(3 * inObjects.GetCount());
 
@@ -370,7 +477,7 @@ CStatus COBJ::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 
 		X3DObject xobj(inObjects[iObject]);
 		if (!xobj.IsValid()) {
-			fails++; 
+			fails++;
 			continue;
 		}
 
@@ -427,14 +534,14 @@ CStatus COBJ::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 
 			ClusterProperty foundProperty(CFileFormat::getVertexColorProperty(xobj));
 
-			if(foundProperty.IsValid()) {
-			
+			if (foundProperty.IsValid()) {
+
 				m_progress.PutCaption("Exporting OBJ (Vertex Colors of '" + xobj.GetName() + "')");
 
 				char hex[] = "0123456789abcdef";
 
 				Output(m_file, "\r\n# The following MRGB block contains ZBrush Vertex Color (Polypaint) and masking output as 4 hexadecimal values per vertex. The vertex color format is MMRRGGBB with up to 64 entries per MRGB line.\r\n");
-			
+
 				CFloatArray FA_RGB_ordered;
 				CLongArray LA_RGBCounts_ordered;
 				CFloatArray FA_RGBA;
@@ -609,7 +716,7 @@ CStatus COBJ::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 				}
 			}
 
-			if(bWriteMTLFile)
+			if (bWriteMTLFile)
 				Output(m_matfile, string("newmtl ") + material.GetName().GetAsciiString() + "\r\n" + strKa + strKd + strKs + strNs + strIllum + "\r\n");
 
 			long ix = 0;
@@ -661,12 +768,12 @@ CStatus COBJ::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 
 		m_vertices_base_ix_group += VP.GetCount() / 3;
 		m_uvs_base_ix_group += m_hashmap_uv.size();
-		m_normals_base_ix_group += m_hashmap_normals.size();	
+		m_normals_base_ix_group += m_hashmap_normals.size();
 	}
 
 	fclose(m_file);
 
-	if(bWriteMTLFile)
+	if (bWriteMTLFile)
 		fclose(m_matfile);
 
 	if (fails == 0)
@@ -687,7 +794,7 @@ ULONG COBJ::hex2dec(char f)
 		return f - '0';
 	else if (f >= 'a' && f <= 'z')
 		return f - 'a' + 10;
-	else if (f >= 'A' && f <= 'Z') 
+	else if (f >= 'A' && f <= 'Z')
 		return f - 'A' + 10;
 	else
 		return 0;

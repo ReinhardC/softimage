@@ -200,7 +200,7 @@ CStatus CPLY::Execute_Import(string initFilePathName, bool bImportUVs, bool bImp
 							bY_initialized = true;
 						}
 						else if (name == "z") {
-							Z = (float)atof(tokens[next_struct_offset].c_str());
+							Z = (float)atof(tokens[next_struct_offset].c_str()); 
 							bZ_initialized = true;
 						}
 						else if (name == "r" || name == "red") {

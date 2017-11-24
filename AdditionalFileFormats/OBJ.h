@@ -31,6 +31,7 @@
 #include <xsi_color4f.h>
 #include <xsi_color.h>
 #include <xsi_point.h>
+#include <xsi_preferences.h>
 #include <xsi_clusterpropertybuilder.h>
 
 #include <unordered_map>
