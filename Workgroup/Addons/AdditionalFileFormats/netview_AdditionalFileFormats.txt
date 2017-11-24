@@ -1,2 +1,3 @@
 Version 2.0 - improved obj export speed, fixes progress bar
 Version 2.1 - fixes 1 off error reading obj
+Version 2.2 - more fixes reading obj, changed preferences (might have to delete File Format Preferences.prefs)
