@@ -45,13 +45,17 @@ function FileFormatOptions_Define( in_ctxt )
 
 	dim oCustomProperty
 	set oCustomProperty = in_ctxt.Source
-	
+	 
 	'OBJ 
 	call oCustomProperty.AddParameter3( "OBJ_DefaultPath", siString )		
 	call oCustomProperty.AddParameter3( "OBJ_LastUsedPath", siString )
 	call oCustomProperty.AddParameter3( "OBJ_rememberLastUsedPath", siBool, 1, , , false ) 
 	call oCustomProperty.AddParameter3( "OBJ_WriteMTL", siBool, 0, 0, 1, false )	
 	call oCustomProperty.AddParameter3( "OBJ_LocalCoords", siBool, 0, 0, 1, false )
+	call oCustomProperty.AddParameter3( "OBJ_ImportPolypaint", siBool, 1, 0, 1, false )
+	call oCustomProperty.AddParameter3( "OBJ_ImportMask", siBool, 1, 0, 1, false )
+	call oCustomProperty.AddParameter3( "OBJ_ImportUserNormals", siBool, 1, 0, 1, false )
+	call oCustomProperty.AddParameter3( "OBJ_ImportUVs", siBool, 1, 0, 1, false )
 	call oCustomProperty.AddParameter3( "OBJ_CreateObjectsTag", siInt4, 0, 0, 3, false )
 	call oCustomProperty.AddParameter3( "OBJ_CreateClustersTag", siInt4, 2, 0, 3, false )
 	
@@ -99,6 +103,10 @@ function FileFormatOptions_DefineLayout( in_ctxt )
 		set oItem = oLayout.AddEnumControl("OBJ_CreateObjectsTag", aComboItems, "Create an Object")
 		aComboItems = Array("for each G tag", 0, "for each O tag", 1, "for each USEMTL tag (default)", 2, "Do not create Clusters", 3)
 		set oItem = oLayout.AddEnumControl("OBJ_CreateClustersTag", aComboItems, "Create a Cluster")		
+		set oItem = OLayout.AddItem( "OBJ_ImportPolypaint", "Import ZBrush Polypaint")
+		set oItem = OLayout.AddItem( "OBJ_ImportMask", "Import ZBrush Mask")
+		set oItem = OLayout.AddItem( "OBJ_ImportUserNormals", "Import User Normals")
+		set oItem = OLayout.AddItem( "OBJ_ImportUVs", "Import UVs")		
 	oLayout.EndGroup
 	
 	oLayout.AddTab "STL"	
@@ -223,7 +231,14 @@ function ShowImportOBJFileBrowser( in_ctxt )
 	oFileBrowser.Filter = "Wavefront OBJ Format (*.obj)|*.obj||"
 	oFileBrowser.ShowOpen() 
 	if oFileBrowser.FilePathName <> ""  then
-		ImportOBJ oFileBrowser.FilePathName
+		ImportOBJ oFileBrowser.FilePathName, _
+			Application.Preferences.GetPreferenceValue("File Format Options.OBJ_ImportUVs"), _
+			Application.Preferences.GetPreferenceValue("File Format Options.OBJ_ImportUserNormals"), _
+			Application.Preferences.GetPreferenceValue("File Format Options.OBJ_ImportMask"), _
+			Application.Preferences.GetPreferenceValue("File Format Options.OBJ_ImportPolypaint"), _
+			Application.Preferences.GetPreferenceValue("File Format Options.OBJ_CreateObjectsTag"), _
+			Application.Preferences.GetPreferenceValue("File Format Options.OBJ_CreateClustersTag")
+	
 		saveInitialDir "OBJ", oFileBrowser.FilePath
 	end if
 

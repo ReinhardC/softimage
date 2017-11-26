@@ -93,6 +93,24 @@ protected:
 		return elems;
 	}
 
+	vector<char*> quickSplit(char* split_this, char delimiter)
+	{
+		int i = 0;
+		vector<char*> result;
+		result.push_back(split_this);
+		while (split_this[i] != '\0') {
+			if (split_this[i] == delimiter) {
+				split_this[i] = '\0';
+				if (split_this[i + 1] != delimiter && split_this[i + 1] != '\r' && split_this[i + 1] != '\n' && split_this[i + 1] != '\0')
+					result.push_back(split_this + i + 1);
+			}
+			else if (split_this[i] == '\n' || split_this[i] == '\r')
+				split_this[i] = '\0';
+			i++;
+		}
+		return result;
+	}
+
 	string m_filePathName;
 	string m_filePath;
 	string m_fileNameWithExt;

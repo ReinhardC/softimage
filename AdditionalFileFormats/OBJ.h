@@ -60,5 +60,5 @@ class COBJ : public CFileFormat
 public:
 	string getFormatName() { return "OBJ"; };
 	CStatus Execute_Export(CRefArray& inObjects, string initFilePathName, bool bExportPolypaint, bool bSeparateFiles, bool bWriteMTLFile, bool bExportLocalCoords);
-	CStatus Execute_Import(string initFilePathName, bool bImportUVs, bool bImportUserNormals, bool bImportMask, bool bImportPolypaint);
+	CStatus Execute_Import(string initFilePathName, bool prefs_bImportUVs, bool prefs_bImportUserNormals, bool prefs_bImportMask, bool prefs_bImportPolypaint, int prefs_CreateObjectsTag, int prefs_CreateClustersTag);
 };

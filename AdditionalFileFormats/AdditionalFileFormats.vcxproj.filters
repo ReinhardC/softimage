@@ -40,4 +40,7 @@
       <UniqueIdentifier>{c584c25b-a678-406d-8676-f95d1d914429}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
+  <ItemGroup>
+    <Text Include="OBJ.txt" />
+  </ItemGroup>
 </Project>
