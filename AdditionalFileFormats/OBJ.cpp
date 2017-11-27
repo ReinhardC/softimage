@@ -54,15 +54,17 @@ CStatus COBJ::Execute_Import(string initFilePathName, bool OBJ_ImportUVs, bool O
 	CLongArray* pCurrentMatCluster = NULL;
 	string strCurrentMatName;
 
+	// polypaint is per file (all vertices in a file), uv and normals are per object
 	bool bFileHasUVs = false;
 	bool bFileHasNormals = false;
-	bool bFileHasPolypaint = false; // polypaint is per file (all vertices in a file), uv and normals are per object
+	bool bFileHasPolypaint = false; 
 
 	unordered_map<string, MeshData*> mesh_map;
 
 	CFileFormat::initStrings(initFilePathName);
 	
 	MeshData* pCurrentMesh = new MeshData(m_fileName);
+	MeshData* pPreviousMesh = NULL;
 
 	// for computing mesh auto scale (1, 0.1 or 0.01)
 	double lfExtentX, lfMaxExtentX = -DBL_MAX, lfMinExtentX = DBL_MAX;
@@ -79,7 +81,7 @@ CStatus COBJ::Execute_Import(string initFilePathName, bool OBJ_ImportUVs, bool O
 	m_progress.PutVisible(true);
 
 	int max_line_length = 4096;
-	int increment_bytes = 2048;
+	int increment_bytes = 2048; // if a line is longer that 4096 byte, increment buffer by 2048
 
 	char* pbuf = (char*)malloc(max_line_length);
 	*(pbuf + max_line_length - 1) = '\0';
@@ -99,7 +101,7 @@ CStatus COBJ::Execute_Import(string initFilePathName, bool OBJ_ImportUVs, bool O
 		pos_in_file_bytes = ftell(m_file);
 		actual_bytes_read = pos_in_file_bytes - last_pos_in_file_bytes + 1;
 
-		// realloc if line is too short
+		// realloc if line is too shorte
 		while (actual_bytes_read == max_line_length && *(pbuf + max_line_length - 2) != '\n') {
 			max_line_length += increment_bytes;
 			pbuf = (char*)realloc(pbuf, max_line_length);
@@ -126,9 +128,14 @@ CStatus COBJ::Execute_Import(string initFilePathName, bool OBJ_ImportUVs, bool O
 		{
 			if (current_action_id != 5) {
 				current_action_id = 5;
-				nbModeSwitches5++;
-				if (nbModeSwitches5 < 20)
-					m_progress.PutCaption("Importing OBJ (Polygons of " + CString(pCurrentMesh->name.c_str()) + ")");
+				if (pPreviousMesh != pCurrentMesh) {
+					nbModeSwitches5++;
+					if (nbModeSwitches5 < 25)
+						m_progress.PutCaption("Importing OBJ (Polygons of " + CString(pCurrentMesh->name.c_str()) + ")");					
+					else if (nbModeSwitches5 == 25) 
+						m_progress.PutCaption("Importing OBJ (Polygons)"); // too much logging, switch to simple log
+				}
+				pPreviousMesh = pCurrentMesh;				
 			}
 
 			if (!mesh_map.size())
@@ -145,48 +152,48 @@ CStatus COBJ::Execute_Import(string initFilePathName, bool OBJ_ImportUVs, bool O
 				// ** Triple format: ********** 
 				// **
 				// ** PointIndex / UVIndex / NormalIndex
+				// ** Note these are indices of elements in the 3 main file arrays, not the individual objects.
 
 				size_t nbTripleEls = qTriple.size();				
 
-				long ixPointPosition_inFile = atol(qTriple[0]) - 1;
-				long ixPointPosition;
-				if (pCurrentMesh->ixPointPosition_lookup.count(ixPointPosition_inFile) == 0) {
-					ixPointPosition = pCurrentMesh->ixPointPosition_next;
-					pCurrentMesh->ixPointPosition_lookup.insert({ ixPointPosition_inFile, pCurrentMesh->ixPointPosition_next++ });
-					pCurrentMesh->PointPositions.push_back(PP_inFile[3 * ixPointPosition_inFile]);
-					pCurrentMesh->PointPositions.push_back(PP_inFile[3 * ixPointPosition_inFile + 1]);
-					pCurrentMesh->PointPositions.push_back(PP_inFile[3 * ixPointPosition_inFile + 2]);
+				long PointIndexFile = atol(qTriple[0]) - 1;
+				long PointIndexMesh;
+				if (pCurrentMesh->ixPointPosition_lookup.count(PointIndexFile) == 0) {
+					PointIndexMesh = pCurrentMesh->ixPointPosition_next;
+					pCurrentMesh->ixPointPosition_lookup.insert({ PointIndexFile, pCurrentMesh->ixPointPosition_next++ });
+					pCurrentMesh->PointPositions.push_back(PP_inFile[3 * PointIndexFile]);
+					pCurrentMesh->PointPositions.push_back(PP_inFile[3 * PointIndexFile + 1]);
+					pCurrentMesh->PointPositions.push_back(PP_inFile[3 * PointIndexFile + 2]);
 					if (bFileHasPolypaint)
-						pCurrentMesh->Mask.push_back(MRGB_inFile[4 * ixPointPosition_inFile]);
+						pCurrentMesh->Mask.push_back(MRGB_inFile[4 * PointIndexFile]);
 				}
 				else
-					ixPointPosition = pCurrentMesh->ixPointPosition_lookup[ixPointPosition_inFile];
+					PointIndexMesh = pCurrentMesh->ixPointPosition_lookup[PointIndexFile];
 
-				pCurrentMesh->PointIndices.push_back(ixPointPosition);
-
+				pCurrentMesh->PointIndices.push_back(PointIndexMesh);
 				if (OBJ_ImportUVs) 
 					if (nbTripleEls > 1 && *(qTriple[1]) != '\0' && bFileHasUVs) {
 						pCurrentMesh->bHasUVs = true;
-						int ixUV_inFile = atoi(qTriple[1]) - 1;
-						pCurrentMesh->UVs.push_back(UVs_inFile[3 * ixUV_inFile]);
-						pCurrentMesh->UVs.push_back(UVs_inFile[3 * ixUV_inFile + 1]);
-						pCurrentMesh->UVs.push_back(UVs_inFile[3 * ixUV_inFile + 2]);
+						int UVIndex = atoi(qTriple[1]) - 1;
+						pCurrentMesh->UVs.push_back(UVs_inFile[3 * UVIndex]);
+						pCurrentMesh->UVs.push_back(UVs_inFile[3 * UVIndex + 1]);
+						pCurrentMesh->UVs.push_back(UVs_inFile[3 * UVIndex + 2]);
 					}
 					else {
 						double u = ((double)rand() / (RAND_MAX)) / 10000; //bug workaround: uvs on 0 can lead to crashes in subdivision.dll for some topologies...
 						double v = ((double)rand() / (RAND_MAX)) / 10000;
-						pCurrentMesh->UVs.push_back(u);
-						pCurrentMesh->UVs.push_back(v);
-						pCurrentMesh->UVs.push_back(0.0f);
+						pCurrentMesh->UVs.push_back((float)u);
+						pCurrentMesh->UVs.push_back((float)v);
+						pCurrentMesh->UVs.push_back(0.0f); 
 					}
 
 				if (OBJ_ImportUserNormals) 
 					if (nbTripleEls > 2 && *(qTriple[2]) != '\0' && bFileHasNormals) {
 						pCurrentMesh->bHasNormals = true;
-						int ixNormal_inFile = atoi(qTriple[2]) - 1;
-						pCurrentMesh->Normals.push_back(Normals_inFile[3 * ixNormal_inFile]);
-						pCurrentMesh->Normals.push_back(Normals_inFile[3 * ixNormal_inFile + 1]);
-						pCurrentMesh->Normals.push_back(Normals_inFile[3 * ixNormal_inFile + 2]);
+						int NormalIndex = atoi(qTriple[2]) - 1;
+						pCurrentMesh->Normals.push_back(Normals_inFile[3 * NormalIndex]);
+						pCurrentMesh->Normals.push_back(Normals_inFile[3 * NormalIndex + 1]);
+						pCurrentMesh->Normals.push_back(Normals_inFile[3 * NormalIndex + 2]);
 					}
 					else {
 						pCurrentMesh->Normals.push_back(0.0); //TODO: to be be replaced by actual normal later on
@@ -196,13 +203,13 @@ CStatus COBJ::Execute_Import(string initFilePathName, bool OBJ_ImportUVs, bool O
 
 				if (OBJ_ImportPolypaint || OBJ_ImportMask) 
 					if(bFileHasPolypaint) {
-						pCurrentMesh->RGBA.push_back(MRGB_inFile[4 * ixPointPosition_inFile + 1]);
-						pCurrentMesh->RGBA.push_back(MRGB_inFile[4 * ixPointPosition_inFile + 2]);
-						pCurrentMesh->RGBA.push_back(MRGB_inFile[4 * ixPointPosition_inFile + 3]);
+						pCurrentMesh->RGBA.push_back(MRGB_inFile[4 * PointIndexFile + 1]);
+						pCurrentMesh->RGBA.push_back(MRGB_inFile[4 * PointIndexFile + 2]);
+						pCurrentMesh->RGBA.push_back(MRGB_inFile[4 * PointIndexFile + 3]);
 						pCurrentMesh->RGBA.push_back(255.0);
 					}
 			}
-			pCurrentMesh->PolygonPointCounts.push_back(nbPolypoints);
+			pCurrentMesh->PolygonPointCounts.push_back((long)nbPolypoints);
 		}
 		else if (!strcmp(firstToken, new_cluster_tag)) {
 			strCurrentMatName = secondToken;
@@ -215,8 +222,10 @@ CStatus COBJ::Execute_Import(string initFilePathName, bool OBJ_ImportUVs, bool O
 			if (current_action_id != 2) {
 				current_action_id = 2;
 				nbModeSwitches2++;
-				if (nbModeSwitches2 < 20)
+				if (nbModeSwitches2 < 20) {
 					m_progress.PutCaption("Importing OBJ (Vertex Positions)");
+					app.LogMessage("Importing OBJ (Vertex Positions)");
+				}
 			}
 
 			float x = (float)atof(secondToken);
@@ -237,8 +246,10 @@ CStatus COBJ::Execute_Import(string initFilePathName, bool OBJ_ImportUVs, bool O
 			if (current_action_id != 3) {
 				current_action_id = 3;
 				nbModeSwitches3++;
-				if (nbModeSwitches3 < 20)
+				if (nbModeSwitches3 < 20) {
 					m_progress.PutCaption("Importing OBJ (UVs)");
+					app.LogMessage("Importing OBJ (UVs)");
+				}
 			}
 
 			UVs_inFile.push_back((float)atof(secondToken));
@@ -254,8 +265,10 @@ CStatus COBJ::Execute_Import(string initFilePathName, bool OBJ_ImportUVs, bool O
 			if (current_action_id != 4) {
 				current_action_id = 4;
 				nbModeSwitches4++;
-				if (nbModeSwitches4 < 20)
+				if (nbModeSwitches4 < 20) {
 					m_progress.PutCaption("Importing OBJ (Normals)");
+					app.LogMessage("Importing OBJ (Normals)");
+				}
 			}
 
 			Normals_inFile.push_back((float)atof(secondToken));
