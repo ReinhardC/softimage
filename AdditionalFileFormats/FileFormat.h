@@ -23,6 +23,9 @@
 using namespace XSI;
 using namespace std;
 
+// stupid
+#define STR_EQUAL(A,B) (!strcmp(A,B))
+
 template<typename Out>
 void split(const string &s, char delim, Out result) {
 	stringstream ss;

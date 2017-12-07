@@ -2,6 +2,8 @@
 
 #include "FileFormat.h"
  
+#include "ObjPreferences.h"
+
 #include <xsi_pluginregistrar.h>
 #include <xsi_status.h>
 #include <xsi_decl.h>
@@ -24,6 +26,7 @@
 #include <xsi_ppglayout.h>
 #include <xsi_meshbuilder.h>
 #include <xsi_math.h>
+#include <xsi_vector3.h>
 #include <xsi_comapihandler.h>
 #include <xsi_kinematics.h>
 #include <xsi_material.h>
@@ -31,9 +34,11 @@
 #include <xsi_color4f.h>
 #include <xsi_color.h>
 #include <xsi_point.h>
+#include <xsi_polygonface.h>
 #include <xsi_preferences.h>
 #include <xsi_clusterpropertybuilder.h>
 
+#include <string>
 #include <unordered_map>
 #include <utility>
 #include <array>
@@ -47,10 +52,47 @@ typedef struct _ObjVtx {
 	float x, y, z;	
 } ObjVtx;
 
+class MeshData {
+public:
+	MeshData(string name) { this->name = name; }
+
+	string name;
+
+	bool bIsDefaultMesh = true; // has not been initialized by an "o" tag yet
+
+	long ixPolygon = 0;
+	vector<long> PolygonPointCounts;
+	vector<double> PointPositions;
+	vector<long> PointIndices;
+	long ixPointPosition_next = 0;
+	unordered_map<long, long> ixPointPosition_lookup;
+	unordered_map<string, CLongArray> IcsMaterialClusters;
+
+	bool bHasNormals = false;
+	vector <float> Normals;
+
+	bool bHasUVs = false;
+	vector<float> UVs;
+
+	vector<float> RGBA;
+	vector<float> Mask;
+};
+
 class COBJ : public CFileFormat
 {
 	FILE* m_file;
 	FILE* m_matfile;
+
+	// polypaint is per file (all vertices in a file), uv and normals are per object
+	bool bFileHasUVs = false;
+	bool bFileHasNormals = false;
+	bool bFileHasPolypaint = false;
+
+	MATH::CVector3 vAutoScaling; // auto scale meshes
+
+public:	
+	ObjPreferences Prefs;
+
 	unordered_map<tr1::array<float, 3>, int, f3hash> m_hashmap_uv, m_hashmap_normals;
 	size_t m_vertices_base_ix_group = 0, m_uvs_base_ix_group = 0, m_normals_base_ix_group = 0;
 
@@ -60,5 +102,9 @@ class COBJ : public CFileFormat
 public:
 	string getFormatName() { return "OBJ"; };
 	CStatus Execute_Export(CRefArray& inObjects, string initFilePathName, bool bExportPolypaint, bool bSeparateFiles, bool bWriteMTLFile, bool bExportLocalCoords);
-	CStatus Execute_Import(string initFilePathName, bool prefs_bImportUVs, bool prefs_bImportUserNormals, bool prefs_bImportMask, bool prefs_bImportPolypaint, int prefs_CreateObjectsTag, int prefs_CreateClustersTag);
+	CStatus Execute_Import(string filePathNam);
+	CStatus Import(string filePathNam, 
+		unordered_map<string, MeshData*>& mesh_map, 
+		unordered_map<string, string>& material_map,
+		string& mat_file);
 };

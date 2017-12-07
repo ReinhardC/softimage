@@ -153,16 +153,15 @@ XSIPLUGINCALLBACK CStatus ImportOBJ_Init(CRef& in_ctxt)
 	args.Add(L"FileName");
 	args.Add(L"OBJ_ImportUVs", true);
 	args.Add(L"OBJ_ImportUserNormals", true);
-	args.Add(L"OBJ_ImportMask", false);
+	args.Add(L"OBJ_ImportMask", true);
 	args.Add(L"OBJ_ImportPolypaint", true);
-	args.Add(L"OBJ_CreateObjectsTag", 0);
-	args.Add(L"OBJ_CreateClustersTag", 2);
+	args.Add(L"OBJ_CreateObjectsTag", "g");
+	args.Add(L"OBJ_CreateClustersTag", "usemtl");
 	
-	cmd.PutDescription(L"ImportOBJ([str]FolderAndFilename)");
+	cmd.PutDescription(L"ImportOBJ(string FolderAndFilename, bool importUV, bool importNormals, bool importZBrushMask, bool import ZBrushPolypaint, string creatObjectsTag, string createClustesTag)");
 
 	return CStatus::OK;
 }
-
 
 XSIPLUGINCALLBACK CStatus ImportOBJ_Execute(XSI::CRef& in_ctxt)
 {
@@ -171,20 +170,21 @@ XSIPLUGINCALLBACK CStatus ImportOBJ_Execute(XSI::CRef& in_ctxt)
 	Command cmd = ctxt.GetSource();
 	ArgumentArray args = cmd.GetArguments();
 	CString strFolderAndFileName(args.GetItem(0).GetValue());
-	bool OBJ_ImportUVs(args.GetItem(1).GetValue());
-	bool OBJ_ImportUserNormals(args.GetItem(2).GetValue());
-	bool OBJ_ImportMask(args.GetItem(3).GetValue());
-	bool OBJ_ImportPolypaint(args.GetItem(4).GetValue());
-	int OBJ_CreateObjectsTag(args.GetItem(5).GetValue());
-	int OBJ_CreateClustersTag(args.GetItem(6).GetValue());
+
+	COBJ obj;
+	obj.Prefs.OBJ_ImportUVs = args.GetItem(1).GetValue();
+	obj.Prefs.OBJ_ImportUserNormals = args.GetItem(2).GetValue();
+	obj.Prefs.OBJ_ImportMask = args.GetItem(3).GetValue();
+	obj.Prefs.OBJ_ImportPolypaint = args.GetItem(4).GetValue();
+	obj.Prefs.OBJ_CreateObjectsTag = args.GetItem(5).GetValue();
+	obj.Prefs.OBJ_CreateClustersTag = args.GetItem(6).GetValue();
 
 	if (strFolderAndFileName.IsEmpty()) {
 		app.LogMessage(L"No Filename Specified in Arguments");
 		return CStatus::Unexpected;
 	}
 
-	COBJ obj;
-	return obj.Execute_Import(strFolderAndFileName.GetAsciiString(), OBJ_ImportUVs, OBJ_ImportUserNormals, OBJ_ImportMask, OBJ_ImportPolypaint, OBJ_CreateObjectsTag, OBJ_CreateClustersTag);
+	return obj.Execute_Import(strFolderAndFileName.GetAsciiString());
 }
 
 XSIPLUGINCALLBACK CStatus ImportPLY_Init(CRef& in_ctxt)

@@ -23,7 +23,7 @@
     <ProjectGuid>{A0376DD3-5EC3-40F2-B1E9-89E2C07D3E42}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>STLimportexport</RootNamespace>
-    <WindowsTargetPlatformVersion>10.0.14393.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0.16299.0</WindowsTargetPlatformVersion>
     <ProjectName>AdditionalFileFormats</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -80,7 +80,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>false</LinkIncremental>
     <TargetName>$(ProjectName).64</TargetName>
-    <OutDir>../../../Addons/AdditionalFileFormats/Application/Plugins/</OutDir>
+    <OutDir>../../Addons/AdditionalFileFormats/Application/Plugins/</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
@@ -186,14 +186,16 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="FileFormat.cpp" />
-    <ClCompile Include="OBJ.cpp" />
+    <ClCompile Include="OBJ_Import.cpp" />
     <ClCompile Include="PLY.cpp" />
+    <ClCompile Include="OBJ_Export.cpp" />
     <ClCompile Include="STL.cpp" />
     <ClCompile Include="Plugin_Main.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="f3hash.h" />
     <ClInclude Include="FileFormat.h" />
+    <ClInclude Include="ObjPreferences.h" />
     <ClInclude Include="OBJ.h" />
     <ClInclude Include="PLY.h" />
     <ClInclude Include="STL.h" />

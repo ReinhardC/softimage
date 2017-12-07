@@ -8,10 +8,13 @@
     <ClCompile Include="FileFormat.cpp">
       <Filter>src</Filter>
     </ClCompile>
-    <ClCompile Include="OBJ.cpp">
+    <ClCompile Include="STL.cpp">
       <Filter>src</Filter>
     </ClCompile>
-    <ClCompile Include="STL.cpp">
+    <ClCompile Include="OBJ_Import.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="OBJ_Export.cpp">
       <Filter>src</Filter>
     </ClCompile>
   </ItemGroup>
@@ -29,6 +32,9 @@
       <Filter>headers</Filter>
     </ClInclude>
     <ClInclude Include="PLY.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="ObjPreferences.h">
       <Filter>headers</Filter>
     </ClInclude>
   </ItemGroup>
