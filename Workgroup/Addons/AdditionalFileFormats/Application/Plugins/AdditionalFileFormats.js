@@ -18,22 +18,22 @@ function ApplyShaderTree_arnoldrender(matName, matDefinition, objList, folder)
 	var newMaterial = matLib.CreateMaterial( "Phong", matName );
 	var newPhong = newMaterial.Shaders.Item(0);
 	DeleteObj(newPhong);
-	
+
     var newSurface = CreateShaderFromProgID("Arnold.standard_surface.1.0", newMaterial, null);
 	var closure = CreateShaderFromProgID("Arnold.closure.1.0", newMaterial, null);
 	SIConnectShaderToCnxPoint(newSurface, closure + ".closure", false);
 	SIConnectShaderToCnxPoint(closure, newMaterial + ".surface", false);
-		
+	
 	if(matDefinition.Kd) 
 		applyColor(newSurface.base_color, matDefinition.Kd);
 	
 	if(matDefinition.Ks) 	
 		applyColor(newSurface.specular_color, matDefinition.Ks);
-	
+		
 	if(matDefinition.Ns)
-		newSurface.specular_roughness.Value = matDefinition.Ns;	
-	
-	if(matDefinition.map_Kd) 
+		newSurface.specular_roughness.Value = Math.max(0.0, Math.min(1.0, matDefinition.Ns));
+		
+	if(matDefinition.map_Kd)
 		applyAImage(newSurface.base_color, folder + matDefinition.map_Kd, newMaterial);
 	
 	if(matDefinition.map_Ks) 
@@ -301,9 +301,8 @@ function ApplyShaderTree_Execute( matName, matDefinitionAsJson, objList, folder 
 		LogMessage("Error in Material Definition \"" + matDefinitionAsJson + "\"", siWarningMsg);
 		return;
 	}
-	
-	eval("ApplyShaderTree_" + strRenderer + "(matName, material, objList, folder);"); // applies material to element	
 
+	eval("ApplyShaderTree_" + strRenderer + "(matName, material, objList, folder);"); // applies material to element		
 	return;
 	
 	try {
