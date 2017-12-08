@@ -26,19 +26,21 @@ function ApplyShaderTree_arnoldrender(matName, matDefinition, objList, folder)
 	
 	if(matDefinition.Kd) 
 		applyColor(newSurface.base_color, matDefinition.Kd);
-	
-	if(matDefinition.Ks) 	
-		applyColor(newSurface.specular_color, matDefinition.Ks);
-		
-	if(matDefinition.Ns)
-		newSurface.specular_roughness.Value = Math.max(0.0, Math.min(1.0, matDefinition.Ns));
-		
 	if(matDefinition.map_Kd)
 		applyAImage(newSurface.base_color, folder + matDefinition.map_Kd, newMaterial);
-	
+			
+	if(matDefinition.Ks) 	
+		applyColor(newSurface.specular_color, matDefinition.Ks);
 	if(matDefinition.map_Ks) 
 		applyAImage(newSurface.specular_color, folder + matDefinition.map_Ks, newMaterial);
 		
+	if(matDefinition.Kt)
+		applyColor(newSurface.transmission_color, matDefinition.Kt);
+	if(matDefinition.map_Kt) 
+		applyAImage(newSurface.transmission_color, folder + matDefinition.map_Kt, newMaterial);
+			
+	if(matDefinition.Ns)
+		newSurface.specular_roughness.Value = Math.max(0.0, Math.min(1.0, matDefinition.Ns));
 	if(matDefinition.map_Ns) 
 		applyAImage(newSurface.specular_roughness, folder + matDefinition.map_Ns, newMaterial);	
 	
@@ -112,28 +114,34 @@ function ApplyShaderTree_mentalray(matName, matDefinition, objList, folder)
 	
 	if(matDefinition.Kd) 
 		applyColor(newPhong.diffuse, matDefinition.Kd);
-	
-	if(matDefinition.Ks) 	
-		applyColor(newPhong.specular, matDefinition.Ks);
-	
-	if(matDefinition.Ka) 
-		applyColor(newPhong.ambient, matDefinition.Ka);
-			
-	if(matDefinition.Ns)
-		newPhong.shiny.Value = matDefinition.Ns;	
-	
 	if(matDefinition.map_Kd) 
 		applySIImage(newPhong.diffuse, folder + matDefinition.map_Kd, newMaterial);
 	
+	if(matDefinition.Ks) 	
+		applyColor(newPhong.specular, matDefinition.Ks);
 	if(matDefinition.map_Ks) 
 		applySIImage(newPhong.specular, folder + matDefinition.map_Ks, newMaterial);
-		
+	
+	if(matDefinition.Ka) 
+		applyColor(newPhong.ambient, matDefinition.Ka);
 	if(matDefinition.map_Ka) 
 		applySIImage(newPhong.ambient, folder + matDefinition.map_Ka, newMaterial);
-	
+			
+	if(matDefinition.Ns)
+		newPhong.shiny.Value = matDefinition.Ns;	
 	if(matDefinition.map_Ns) 
 		applySIImage(newPhong.shiny, folder + matDefinition.map_Ns, newMaterial);
 	
+	if(matDefinition.Kt)
+		applyColor(newPhong.transparency, matDefinition.Kt);
+	
+	if(matDefinition.map_Kt) 
+		applySIImage(newPhong.transparency, folder + matDefinition.map_Kt, newMaterial);	
+	if(matDefinition.Kr)
+		applyColor(newPhong.reflectivity, matDefinition.Kr);		
+	if(matDefinition.map_Kr) 
+		applySIImage(newPhong.reflectivity, folder + matDefinition.map_Kr, newMaterial);
+		
 	SIAssignMaterial(objList, newMaterial);	
 } 
 
@@ -169,18 +177,22 @@ function ParseShaderTree_mentalray(instance, material, folder)
 				map_Ka = "map_Ka " + getSIImageFileName(shader.ambient.Sources.Item(0).Parent).replace(folder, "") + "\n";
 					
 			if(shader.ProgID != "Softimage.material-lambert.1.0") {
+			 logmessage("phong");
 				Ks = "Ks "  + round6(shader.specular.parameters("red").Value) + " " + round6(shader.specular.parameters('green').Value) + " " + round6(shader.specular.parameters('blue').Value) + "\n";
 				if(shader.specular.Sources.Count != 0 && shader.specular.Sources.Item(0).Parent.ProgID == "Softimage.txt2d-image-explicit.1.0") 
 					map_Ks = "map_Ks " + getSIImageFileName(shader.specular.Sources.Item(0).Parent).replace(folder, "") + "\n";			
 					
 				Kt = "Kt "  + round6(shader.transparency.parameters("red").Value) + " " + round6(shader.transparency.parameters('green').Value) + " " + round6(shader.transparency.parameters('blue').Value) + "\n";
 				if(shader.transparency.Sources.Count != 0 && shader.transparency.Sources.Item(0).Parent.ProgID == "Softimage.txt2d-image-explicit.1.0") 
-					map_Kt = "map_Kt " + getSIImageFileName(shader.transparency.Sources.Item(0).Parent).replace(folder, "") + "\n";			
-
+					map_Kt = "map_Kt " + getSIImageFileName(shader.transparency.Sources.Item(0).Parent).replace(folder, "") + "\n";
+				if(Kt == "Kt 0 0 0\n" && map_Kt == "")
+					Kt = "";
+					
 				Kr = "Kr "  + round6(shader.reflectivity.parameters("red").Value) + " " + round6(shader.reflectivity.parameters('green').Value) + " " + round6(shader.reflectivity.parameters('blue').Value) + "\n";
 				if(shader.reflectivity.Sources.Count != 0 && shader.reflectivity.Sources.Item(0).Parent.ProgID == "Softimage.txt2d-image-explicit.1.0") 
 					map_Kr = "map_Kr " + getSIImageFileName(shader.reflectivity.Sources.Item(0).Parent).replace(folder, "") + "\n";			
-
+				if(Kr == "Kr 0 0 0\n" && map_Kr == "")
+					Kr = "";				
 			}	
 			
 			if(shader.ProgID ==  "Softimage.material-phong.1.0") {
@@ -200,7 +212,7 @@ function ParseShaderTree_mentalray(instance, material, folder)
 		i++;
 	}		
 	
-	return Kd + Ks + Ka + Ns + map_Kd + map_Ks + map_Ka + map_Ns + "\n";
+	return Kd + Ks + Ka + Ns + Kr + Kt + map_Kd + map_Ks + map_Ka + map_Ns + map_Kr + map_Kt + "\n";
 }  
 
 
