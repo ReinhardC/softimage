@@ -495,7 +495,7 @@ function ShowExportSTLFileBrowser( in_ctxt )
 	oFileBrowser.InitialDirectory = getInitialDir( "STL" );
 	oFileBrowser.Filter = "Stereolithography Format (*.stl)|*.stl||"
 	oFileBrowser.ShowSave();
-	bExportBinary = (GetValue("preferences.File Format Options.STL_Format") = 0);
+	bExportBinary = (GetValue("preferences.File Format Options.STL_Format") == 0);
 	bUseLocalCoords = GetValue("preferences.File Format Options.STL_LocalCoords");
 	if (oFileBrowser.FilePathName != "") {
 		ExportSTL (Selection, oFileBrowser.FilePathName, bExportBinary, bUseLocalCoords);
