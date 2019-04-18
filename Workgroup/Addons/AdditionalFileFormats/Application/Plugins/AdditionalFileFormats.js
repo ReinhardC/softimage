@@ -274,7 +274,7 @@ function ParseShaderTree_Execute( instance, material, folder )
 
 		
 	try {
-		//return eval("ParseShaderTree_" + strRenderer + "(instance, material, folder);"); // applies material to element	
+		return eval("ParseShaderTree_" + strRenderer + "(instance, material, folder);"); // applies material to element	
 	}
 	catch(e)
 	{
@@ -334,7 +334,8 @@ function FileFormatOptions_OnStartup_OnEvent(in_ctxt)
 	var ioPrefs = Application.Preferences.Categories("File Format Options");
 	if (!ioPrefs) {
 		logmessage ("Additional File Formats JS Plug-in first time run: Installing Custom Preferences");
-		var customProperty = ActiveSceneRoot.AddProperty("FileFormatOptions"); //, false, "FileFormatOptions");
+		var customProperty = ActiveSceneRoot.AddProperty("FileFormatOptions", false, "FileFormatOptions");
+		Application.LogMessage ("AdditionalFileFormats plugin: Installing custom preferences");
 		InstallCustomPreferences (customProperty, "File Format Options");
 	}
 	else { 
@@ -493,7 +494,7 @@ function ShowExportSTLFileBrowser( in_ctxt )
 	oFileBrowser.DialogTitle = "Select STL File to Export to";
 	oFileBrowser.InitialDirectory = getInitialDir( "STL" );
 	oFileBrowser.Filter = "Stereolithography Format (*.stl)|*.stl||"
-	oFileBrowser.ShowSave(); 
+	oFileBrowser.ShowSave();
 	bExportBinary = (GetValue("preferences.File Format Options.STL_Format") == 0);
 	bUseLocalCoords = GetValue("preferences.File Format Options.STL_LocalCoords");
 	if (oFileBrowser.FilePathName != "") {
