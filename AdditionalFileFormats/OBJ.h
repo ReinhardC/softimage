@@ -80,7 +80,7 @@ public:
 
 class COBJ : public CFileFormat
 {
-	FILE* m_file;
+	FILE* m_pFile;
 	FILE* m_matfile;
 
 	// polypaint is per file (all vertices in a file), uv and normals are per object

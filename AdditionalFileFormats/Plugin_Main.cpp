@@ -57,7 +57,7 @@ XSIPLUGINCALLBACK CStatus ImportSTL_Execute(XSI::CRef& in_ctxt)
 	CString strFolderAndFileName(args.GetItem(0).GetValue());
 
 	if (strFolderAndFileName.IsEmpty()) {
-		app.LogMessage(L"No Filename Specified in Arguments");
+		app.LogMessage(L"No Filename Specified in Arguments!");
 		return CStatus::Unexpected;
 	}
 

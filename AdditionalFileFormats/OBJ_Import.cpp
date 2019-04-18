@@ -135,12 +135,12 @@ CStatus COBJ::Import(string filePathNam,
 {
 	Application app;
 
-	if ((m_file = fopen(filePathNam.c_str(), "rb")) == NULL)
+	if ((m_pFile = fopen(filePathNam.c_str(), "rb")) == NULL)
 		return CStatus::Fail;
 
-	fseek(m_file, 0L, SEEK_END);
-	long file_size_bytes = ftell(m_file);
-	rewind(m_file);
+	fseek(m_pFile, 0L, SEEK_END);
+	long file_size_bytes = ftell(m_pFile);
+	rewind(m_pFile);
 
 	m_progress.PutValue(0);
 	m_progress.PutMaximum(file_size_bytes / 10000);
@@ -176,11 +176,11 @@ CStatus COBJ::Import(string filePathNam,
 	int pos_in_file_bytes = 0, last_pos_in_file_bytes, actual_bytes_read;
 	int line_in_file = 0;
 	do {
-		if (!fgets(pbuf, max_line_length, m_file))
+		if (!fgets(pbuf, max_line_length, m_pFile))
 			break;
 
 		last_pos_in_file_bytes = pos_in_file_bytes;
-		pos_in_file_bytes = ftell(m_file);
+		pos_in_file_bytes = ftell(m_pFile);
 		actual_bytes_read = pos_in_file_bytes - last_pos_in_file_bytes + 1;
 
 		// realloc if buffer is too small
@@ -188,10 +188,10 @@ CStatus COBJ::Import(string filePathNam,
 			max_line_length += increment_bytes;
 			pbuf = (char*)realloc(pbuf, max_line_length);
 
-			if (!fgets(pbuf + max_line_length - increment_bytes - 1, increment_bytes + 1, m_file))
+			if (!fgets(pbuf + max_line_length - increment_bytes - 1, increment_bytes + 1, m_pFile))
 				break;
 
-			pos_in_file_bytes = ftell(m_file);
+			pos_in_file_bytes = ftell(m_pFile);
 			actual_bytes_read = pos_in_file_bytes - last_pos_in_file_bytes + 1;
 		}
 
@@ -512,7 +512,7 @@ CStatus COBJ::Import(string filePathNam,
 				return CStatus::False;
 			}
 		}
-	} while (!feof(m_file));
+	} while (!feof(m_pFile));
 
 	lfExtentX = lfMaxExtentX - lfMinExtentX; // for auto scale
 
@@ -521,7 +521,7 @@ CStatus COBJ::Import(string filePathNam,
 	if (lfExtentX >= 150)
 		vAutoScaling.Set(0.01, 0.01, 0.01);
 
-	fclose(m_file);
+	fclose(m_pFile);
 
 	for (auto& m : material_map)
 		m.second.append("\n};");

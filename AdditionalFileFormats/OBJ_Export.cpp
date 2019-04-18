@@ -8,7 +8,7 @@ CStatus COBJ::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 
 	initStrings(initFilePathName);
 
-	if ((m_file = fopen(m_filePathName.c_str(), "wb")) == NULL)
+	if ((m_pFile = fopen(m_filePathName.c_str(), "wb")) == NULL)
 		return CStatus::Fail;
 
 	if (bWriteMTLFile)
@@ -16,12 +16,12 @@ CStatus COBJ::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 			return CStatus::Fail;
 
 	// output header
-	Output(m_file, "# Custom Wavefront OBJ Exporter\r\n");
+	Output(m_pFile, "# Custom Wavefront OBJ Exporter\r\n");
 
 	if (bWriteMTLFile)
-		Output(m_file, "\r\nmtllib " + m_fileName + ".mtl\r\n");
+		Output(m_pFile, "\r\nmtllib " + m_fileName + ".mtl\r\n");
 
-	Output(m_file, "\r\no " + m_fileName + "\r\n");
+	Output(m_pFile, "\r\no " + m_fileName + "\r\n");
 
 	long fails = 0;
 
@@ -58,12 +58,12 @@ CStatus COBJ::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 		// ************************************************
 		// * Export Vertex Positions
 
-		Output(m_file, "\r\ng " + string(xobj.GetName().GetAsciiString()) + "\r\n");
+		Output(m_pFile, "\r\ng " + string(xobj.GetName().GetAsciiString()) + "\r\n");
 
 		m_progress.PutCaption("Exporting OBJ (Vertex Positions of '" + xobj.GetName() + "')");
 		m_progress.Increment();
 
-		Output(m_file, "\r\n# vertex positions\r\n");
+		Output(m_pFile, "\r\n# vertex positions\r\n");
 
 		MATH::CTransformation xfo = xobj.GetKinematics().GetGlobal().GetTransform();
 
@@ -75,9 +75,9 @@ CStatus COBJ::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 				v = MATH::MapObjectPositionToWorldSpace(xfo, v);
 
 
-			Output(m_file, "v " + to_string(v.GetX()) + " " + to_string(v.GetY()) + " " + to_string(v.GetZ()) + "\r\n");
+			Output(m_pFile, "v " + to_string(v.GetX()) + " " + to_string(v.GetY()) + " " + to_string(v.GetZ()) + "\r\n");
 		}
-		Output(m_file, "# end vertex positions (" + to_string(VP.GetCount() / 3) + ")\r\n");
+		Output(m_pFile, "# end vertex positions (" + to_string(VP.GetCount() / 3) + ")\r\n");
 
 		tr1::array<float, 3> triple;
 
@@ -95,7 +95,7 @@ CStatus COBJ::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 
 				char hex[] = "0123456789abcdef";
 
-				Output(m_file, "\r\n# The following MRGB block contains ZBrush Vertex Color (Polypaint) and masking output as 4 hexadecimal values per vertex. The vertex color format is MMRRGGBB with up to 64 entries per MRGB line.\r\n");
+				Output(m_pFile, "\r\n# The following MRGB block contains ZBrush Vertex Color (Polypaint) and masking output as 4 hexadecimal values per vertex. The vertex color format is MMRRGGBB with up to 64 entries per MRGB line.\r\n");
 
 				CFloatArray FA_RGB_ordered;
 				CLongArray LA_RGBCounts_ordered;
@@ -135,16 +135,16 @@ CStatus COBJ::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 					strLine += hex[(b >> 4) & 0xf];
 					strLine += hex[b & 0xf];
 					if (nColors++ == 63) {
-						Output(m_file, strLine + "\r\n");
+						Output(m_pFile, strLine + "\r\n");
 						strLine = "#MRGB ";
 						nColors = 0;
 					}
 				}
 
 				if (nColors != 0)
-					Output(m_file, strLine + "\r\n");
+					Output(m_pFile, strLine + "\r\n");
 
-				Output(m_file, "# End of MRGB block \r\n");
+				Output(m_pFile, "# End of MRGB block \r\n");
 			}
 		}
 
@@ -163,7 +163,7 @@ CStatus COBJ::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 
 			m_progress.PutCaption("Exporting OBJ (Texture Positions of '" + xobj.GetName() + "')");
 
-			Output(m_file, "\r\n# texture positions\r\n");
+			Output(m_pFile, "\r\n# texture positions\r\n");
 
 			long ix = 0;
 			for (long iUVCoord = 0, l_max = FA_UVs.GetCount() / 3; iUVCoord < l_max; iUVCoord++) {
@@ -176,11 +176,11 @@ CStatus COBJ::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 
 					m_hashmap_uv.insert({ triple, ix++ });
 					//Output(m_file, "vt " + to_string(u) + " " + to_string(v) + " " + to_string(w) + "\r\n");
-					Output(m_file, "vt " + to_string(u) + " " + to_string(v) + "\r\n");
+					Output(m_pFile, "vt " + to_string(u) + " " + to_string(v) + "\r\n");
 				}
 			}
 
-			Output(m_file, "# end texture positions (" + to_string(m_hashmap_uv.size()) + ", down from " + to_string(FA_UVs.GetCount() / 3) + " with duplicates)\r\n");
+			Output(m_pFile, "# end texture positions (" + to_string(m_hashmap_uv.size()) + ", down from " + to_string(FA_UVs.GetCount() / 3) + " with duplicates)\r\n");
 		}
 
 		// ************************
@@ -198,7 +198,7 @@ CStatus COBJ::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 
 			m_progress.PutCaption("Exporting OBJ (Normals of '" + xobj.GetName() + "')");
 
-			Output(m_file, "\r\n# normals\r\n");
+			Output(m_pFile, "\r\n# normals\r\n");
 
 			long ix = 0;
 			for (long iUserNormal = 0, l_max = FA_UserNormals.GetCount() / 3; iUserNormal < l_max; iUserNormal++) {
@@ -209,16 +209,16 @@ CStatus COBJ::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 				if (m_hashmap_normals.count(triple) == 0) {
 
 					m_hashmap_normals.insert({ triple, ix++ });
-					Output(m_file, string("vn ") + to_string(nx) + " " + to_string(ny) + " " + to_string(nz) + "\r\n");
+					Output(m_pFile, string("vn ") + to_string(nx) + " " + to_string(ny) + " " + to_string(nz) + "\r\n");
 				}
 			}
 
-			Output(m_file, string("# end normals (") + to_string(m_hashmap_normals.size()) + ", down from " + to_string(FA_UserNormals.GetCount() / 3) + " with duplicates)\r\n");
+			Output(m_pFile, string("# end normals (") + to_string(m_hashmap_normals.size()) + ", down from " + to_string(FA_UserNormals.GetCount() / 3) + " with duplicates)\r\n");
 		}
 
 		CRefArray Materials = ga.GetMaterials();
 
-		Output(m_file, string("\r\n# ") + to_string(LA_Counts.GetCount()) + " polygons using " + to_string(Materials.GetCount()) + " Material(s)\r\n");
+		Output(m_pFile, string("\r\n# ") + to_string(LA_Counts.GetCount()) + " polygons using " + to_string(Materials.GetCount()) + " Material(s)\r\n");
 
 		// ************************
 		// * Export Polygons
@@ -238,7 +238,7 @@ CStatus COBJ::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 				materialName = "default";
 
 			// if(bWriteMTLFile) - commented out because usemtl might be used for other purposes
-			Output(m_file, string("usemtl ") + string(materialName.GetAsciiString()) + "\r\n");
+			Output(m_pFile, string("usemtl ") + string(materialName.GetAsciiString()) + "\r\n");
 
 
 			CValue rVal;
@@ -293,7 +293,7 @@ CStatus COBJ::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 
 					strTmp += "\r\n";
 
-					Output(m_file, strTmp);
+					Output(m_pFile, strTmp);
 				}
 
 				ix += polyVertexCount;
@@ -305,7 +305,7 @@ CStatus COBJ::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 		m_normals_base_ix_group += m_hashmap_normals.size();
 	}
 
-	fclose(m_file);
+	fclose(m_pFile);
 
 	if (bWriteMTLFile)
 		fclose(m_matfile);

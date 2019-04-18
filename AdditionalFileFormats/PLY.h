@@ -46,7 +46,7 @@ typedef struct _elementinfo {
 
 class CPLY : public CFileFormat {
 
-	FILE* m_file;
+	FILE* m_pFile;
 
 	bool read_header(FILE* file, vector<elementinfo*>&, bool&);
 	void Output(FILE* file, string str);

@@ -3,7 +3,7 @@
 CStatus CSTL::Execute_Import(string initFilePathName)
 {
 	initStrings(initFilePathName);
-
+	 
 	Application app;
 	Model root = app.GetActiveSceneRoot();
 
@@ -13,7 +13,8 @@ CStatus CSTL::Execute_Import(string initFilePathName)
 	// for computing mesh auto scale (1, 0.1 or 0.01)
 	double lfExtentX, lfMaxExtentX = -DBL_MAX, lfMinExtentX = DBL_MAX;
 
-	if ((m_file = fopen(m_filePathName.c_str(), "rb")) == NULL)
+	fopen_s(&m_pFile, m_filePathName.c_str(), "rb");
+	if (m_pFile == NULL)
 		return CStatus::Fail;
 
 	// lookup for finding connected polygon points (STL gives no info about polygon connectivity except overlapping position)
@@ -25,28 +26,34 @@ CStatus CSTL::Execute_Import(string initFilePathName)
 	StlTri nextTriangle; // data struct matching STL file data
 	ULONG numTris1 = 0, numTris2 = 0; // two ways to compute # of tris, to be sure
 	long ix = 0; // index counter
-
-				 // check if binary STL format (string "solid" in first 80 chars)
+	 
+	// check if binary STL format
+	bool bBinary; 
 	char buf[81];
 	buf[80] = '\0';
-	fgets(buf, 80, m_file);
-	CString idLine = buf;
-	bool bBinary = (idLine.FindString("solid") == UINT_MAX);
+	fgets(buf, 80, m_pFile);
+	CString idLine = buf;	
+	fseek(m_pFile, 80L, SEEK_SET); // skip header
+	fread(&numTris1, sizeof(ULONG), 1, m_pFile);
+	fseek(m_pFile, 0L, SEEK_END); 
+	long fileSize = ftell(m_pFile);
+	if (fileSize != 84 + 50 * numTris1 && idLine.FindString("solid") != UINT_MAX) {
+		bBinary = false;
+		fseek(m_pFile, 0L, 0);
+	}
+	else {
+		bBinary = true;
+		fseek(m_pFile, 84L, SEEK_SET); // skip header
 
-	if (bBinary) {
-		fseek(m_file, 80L, 0); // skip header
-		fread(&numTris1, sizeof(ULONG), 1, m_file);
 		m_progress.PutMaximum(numTris1);
 	}
-	else
-		fseek(m_file, 0L, 0);
-
-	while (!feof(m_file))
+	
+	while (!feof(m_pFile))
 	{
 		if (bBinary)
-			fread(&nextTriangle, 50, 1, m_file);
+			fread(&nextTriangle, 50, 1, m_pFile);
 		else
-			parseAsciiFacet(nextTriangle, m_file);
+			parseAsciiFacet(nextTriangle, m_pFile);
 
 		// starting at index 1 because index 0 is normal vector which is ignored
 		for (auto i = 1; i < 4; i++) {
@@ -130,7 +137,7 @@ CStatus CSTL::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 
 	initStrings(initFilePathName);
 
-	if ((m_file = fopen(m_filePathName.c_str(), "wb")) == NULL)
+	if ((m_pFile = fopen(m_filePathName.c_str(), "wb")) == NULL)
 		return CStatus::Fail;
 
 	m_progress.PutVisible(true);
@@ -145,10 +152,10 @@ CStatus CSTL::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 
 		strcpy(header, description.c_str());
 
-		fwrite(header, 1, 80, m_file);
+		fwrite(header, 1, 80, m_pFile);
 	}
 	else
-		Output(m_file, "solid " + m_fileName + "\n\n");
+		Output(m_pFile, "solid " + m_fileName + "\n\n");
 
 	long fails = 0;
 
@@ -175,7 +182,7 @@ CStatus CSTL::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 	m_progress.PutMaximum(numTris1);
 
 	if(bExportBinary)
-		fwrite(&numTris1, sizeof(ULONG), 1, m_file);
+		fwrite(&numTris1, sizeof(ULONG), 1, m_pFile);
 
 	StlTri nextTriangle;
 	
@@ -209,13 +216,13 @@ CStatus CSTL::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 		nextTriangle.v[3][2] = (float) v.GetY();
 
 		if(bExportBinary)
-			fwrite(&nextTriangle, 50, 1, m_file);
+			fwrite(&nextTriangle, 50, 1, m_pFile);
 		else {
-			Output(m_file, "facet normal 0.0 0.0 0.0\n\touter loop\n");
-			Output(m_file, string("\t\tvertex ") + to_string(nextTriangle.v[1][0]) + " " + to_string(nextTriangle.v[1][2]) + " " + to_string(-nextTriangle.v[1][1]) + "\n");
-			Output(m_file, string("\t\tvertex ") + to_string(nextTriangle.v[2][0]) + " " + to_string(nextTriangle.v[2][2]) + " " + to_string(-nextTriangle.v[2][1]) + "\n");
-			Output(m_file, string("\t\tvertex ") + to_string(nextTriangle.v[3][0]) + " " + to_string(nextTriangle.v[3][2]) + " " + to_string(-nextTriangle.v[3][1]) + "\n");
-			Output(m_file, "\tendloop\nendfacet");
+			Output(m_pFile, "facet normal 0.0 0.0 0.0\n\touter loop\n");
+			Output(m_pFile, string("\t\tvertex ") + to_string(nextTriangle.v[1][0]) + " " + to_string(nextTriangle.v[1][2]) + " " + to_string(-nextTriangle.v[1][1]) + "\n");
+			Output(m_pFile, string("\t\tvertex ") + to_string(nextTriangle.v[2][0]) + " " + to_string(nextTriangle.v[2][2]) + " " + to_string(-nextTriangle.v[2][1]) + "\n");
+			Output(m_pFile, string("\t\tvertex ") + to_string(nextTriangle.v[3][0]) + " " + to_string(nextTriangle.v[3][2]) + " " + to_string(-nextTriangle.v[3][1]) + "\n");
+			Output(m_pFile, "\tendloop\nendfacet");
 		}
 
 		numTris2++;
@@ -227,11 +234,11 @@ CStatus CSTL::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 	};	
 
 	if (!bExportBinary)
-		Output(m_file, "endsolid " + m_fileName + "\n\n");
+		Output(m_pFile, "endsolid " + m_fileName + "\n\n");
 	
 	m_progress.PutVisible(false);
 
-	fclose(m_file);
+	fclose(m_pFile);
 
 	if (fails == 0)
 		return CStatus::OK;

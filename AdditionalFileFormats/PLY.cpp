@@ -104,14 +104,14 @@ CStatus CPLY::Execute_Import(string initFilePathName, bool bImportUVs, bool bImp
 	// for computing mesh auto scale (1, 0.1 or 0.01)
 	double lfExtentX, lfMaxExtentX = -DBL_MAX, lfMinExtentX = DBL_MAX;
 
-	if ((m_file = fopen(m_filePathName.c_str(), "rb")) == NULL)
+	if ((m_pFile = fopen(m_filePathName.c_str(), "rb")) == NULL)
 		return CStatus::Fail;
 
-	fseek(m_file, 0L, 0);
+	fseek(m_pFile, 0L, 0);
 	
 	bool bBinary;
 	vector<elementinfo*> header;
-	read_header(m_file, header, bBinary);	
+	read_header(m_pFile, header, bBinary);	
 
 	char cProp[4096];
 	char cListEntry[4096];
@@ -137,9 +137,9 @@ CStatus CPLY::Execute_Import(string initFilePathName, bool bImportUVs, bool bImp
 			next_struct_offset = 0;
 
 			if (bBinary) 
-				fread_s(cProp, 4096, pCurrHeaderElem->size, 1, m_file);						
+				fread_s(cProp, 4096, pCurrHeaderElem->size, 1, m_pFile);						
 			else {
-				fgets(cProp, 180, m_file);
+				fgets(cProp, 180, m_pFile);
 				
 				string stdLine(cProp);
 				trim(stdLine);
@@ -282,7 +282,7 @@ CStatus CPLY::Execute_Import(string initFilePathName, bool bImportUVs, bool bImp
 						unsigned int index;
 
 						if (bBinary) {
-							fread_s(cListEntry, 4096, sizeof(unsigned int), 1, m_file);
+							fread_s(cListEntry, 4096, sizeof(unsigned int), 1, m_pFile);
 							index = *((unsigned int*)(cListEntry + 0));
 						}
 						else
@@ -404,7 +404,7 @@ CStatus CPLY::Execute_Import(string initFilePathName, bool bImportUVs, bool bImp
 						unsigned int index;
 
 						if (bBinary) {
-							fread_s(cListEntry, 4096, sizeof(unsigned int), 1, m_file);
+							fread_s(cListEntry, 4096, sizeof(unsigned int), 1, m_pFile);
 							index = *((unsigned int*)(cListEntry + 0));
 						}
 						else

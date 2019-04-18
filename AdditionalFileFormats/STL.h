@@ -42,7 +42,7 @@ typedef struct _StlTri {
 
 class CSTL : public CFileFormat {
 
-	FILE* m_file;
+	FILE* m_pFile;
 
 public:
 	string getFormatName() { return "STL"; }
