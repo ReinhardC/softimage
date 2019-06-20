@@ -136,7 +136,7 @@
       <UseLibraryDependencyInputs>true</UseLibraryDependencyInputs>
     </ProjectReference>
     <PostBuildEvent>
-      <Command>copy /y $(OutDir)$(TargetName)$(TargetExt) D:\GIT\softimage\Workgroup\Addons\AdditionalFileFormats\Application\Plugins</Command>
+      <Command>copy /y $(OutDir)$(TargetName)$(TargetExt) D:\Repositories\GIT\softimage\Workgroup\Addons\AdditionalFileFormats\Application\Plugins</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -187,7 +187,7 @@
       <RegisterOutput>false</RegisterOutput>
     </Link>
     <PostBuildEvent>
-      <Command>copy /y $(OutDir)$(TargetName)$(TargetExt) ../Workgroup/Addons/$(MSBuildProjectName)/Application/Plugins/$(MSBuildProjectName).64.dll</Command>
+      <Command>copy /y $(OutDir)$(TargetName)$(TargetExt) D:\Repositories\GIT\softimage\Workgroup\Addons\AdditionalFileFormats\Application\Plugins</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>

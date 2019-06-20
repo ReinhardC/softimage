@@ -81,8 +81,11 @@ CStatus CSTL::Execute_Import(string initFilePathName)
 		numTris2++;
 		if (numTris2 % 100000 == 0) { // increment progress bar
 			m_progress.Increment(100000);
-			if (m_progress.IsCancelPressed())
+			if (m_progress.IsCancelPressed()) {
+				fclose(m_pFile);
 				return CStatus::False;
+			}
+				
 		}
 	}
 
@@ -92,6 +95,7 @@ CStatus CSTL::Execute_Import(string initFilePathName)
 
 	if (bBinary && (numTris1 != numTris2)) {
 		app.LogMessage(L"File has different number of triangles than specified in header (specified=" + CString(numTris1) + L", found=" + CString(numTris2) + L")");
+		fclose(m_pFile);
 		return CStatus::Fail;
 	}
 
@@ -104,8 +108,11 @@ CStatus CSTL::Execute_Import(string initFilePathName)
 	// get a mesh builder from the newly created geometry
 	Primitive prim = xobj.GetActivePrimitive();
 	PolygonMesh mesh = prim.GetGeometry();
-	if (!mesh.IsValid())
+	if (!mesh.IsValid()) {
+		fclose(m_pFile);
 		return CStatus::False;
+	}
+		
 
 	// auto scale mesh 
 	MATH::CVector3 vAutoScaling(1.0, 1.0, 1.0);
@@ -128,6 +135,8 @@ CStatus CSTL::Execute_Import(string initFilePathName)
 
 	m_progress.PutVisible(false);
 
+	fclose(m_pFile);
+
 	return err;
 }
 
@@ -140,8 +149,6 @@ CStatus CSTL::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 	if ((m_pFile = fopen(m_filePathName.c_str(), "wb")) == NULL)
 		return CStatus::Fail;
 
-	m_progress.PutVisible(true);
-	m_progress.PutCaption("Exporting STL Data");
 
 	string description("Original Name: " + m_fileName);
 	if (bExportBinary)
@@ -159,83 +166,98 @@ CStatus CSTL::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 
 	long fails = 0;
 
-	X3DObject xobj(inObjects[0]);
-	
-	// Get a geometry accessor from the selected object	
-	Primitive prim = xobj.GetActivePrimitive();
-	PolygonMesh mesh = prim.GetGeometry();
-	if (!mesh.IsValid()) return CStatus::False;
+	ULONG dummy = 0L;
+	if (bExportBinary)
+		fwrite(&dummy, sizeof(ULONG), 1, m_pFile);
 
-	CGeometryAccessor ga = mesh.GetGeometryAccessor(XSI::siConstructionModeSecondaryShape, XSI::siCatmullClark, 0);
+	ULONG totaltris = 0;
 
-	CDoubleArray VP;
-	CLongArray LA_TriIndices, LA_TriNodeIndices;
-	CFloatArray FA_Normals;
+	for (long iObject = 0, iObject_max = inObjects.GetCount(); iObject < iObject_max; iObject++) {
+		X3DObject xobj(inObjects[iObject]);
 
-	ga.GetNodeNormals(FA_Normals);
-	ga.GetTriangleVertexIndices(LA_TriIndices);
-	ga.GetTriangleNodeIndices(LA_TriNodeIndices);
-	ga.GetVertexPositions(VP);
-	
-	ULONG numTris1 = LA_TriIndices.GetCount()/3, numTris2 = 0;
-	
-	m_progress.PutMaximum(numTris1);
+		// Get a geometry accessor from the selected object	
+		Primitive prim = xobj.GetActivePrimitive();
+		PolygonMesh mesh = prim.GetGeometry();
+		if (!mesh.IsValid()) return CStatus::False;
 
-	if(bExportBinary)
-		fwrite(&numTris1, sizeof(ULONG), 1, m_pFile);
+		CGeometryAccessor ga = mesh.GetGeometryAccessor(XSI::siConstructionModeSecondaryShape, XSI::siCatmullClark, 0);
 
-	StlTri nextTriangle;
-	
-	MATH::CVector3 v;
-	MATH::CTransformation xfo = xobj.GetKinematics().GetGlobal().GetTransform();
+		CDoubleArray VP;
+		CLongArray LA_TriIndices, LA_TriNodeIndices;
+		CFloatArray FA_Normals;
 
-	for (long iVertexPosition = 0, i_max = LA_TriIndices.GetCount() / 3; iVertexPosition < i_max; iVertexPosition++)
-	{
-		v.Set(VP[3 * LA_TriIndices[3 * iVertexPosition]], VP[3 * LA_TriIndices[3 * iVertexPosition] + 1] , VP[3 * LA_TriIndices[3 * iVertexPosition] + 2]);
-		if(!bExportLocalCoords)
-			v = MATH::MapObjectPositionToWorldSpace(xfo, v);
+		ga.GetNodeNormals(FA_Normals);
+		ga.GetTriangleVertexIndices(LA_TriIndices);
+		ga.GetTriangleNodeIndices(LA_TriNodeIndices);
+		ga.GetVertexPositions(VP);
+		
+		ULONG numTris1 = LA_TriIndices.GetCount() / 3, numTris2 = 0;
+		
+		totaltris += numTris1;
+		
+		m_progress.PutMaximum(numTris1);
+		m_progress.PutValue(0);
+		m_progress.PutVisible(true);
+		m_progress.PutCaption("Exporting STL Data (Object " + CString(iObject+1) + CString(" of ") + CString(iObject_max) + CString(")"));
 
-		nextTriangle.v[1][0] = (float) v.GetX();
-		nextTriangle.v[1][1] = (float)-v.GetZ();
-		nextTriangle.v[1][2] = (float) v.GetY();
+		StlTri nextTriangle;
 
-		v.Set(VP[3 * LA_TriIndices[3 * iVertexPosition + 1]], VP[3 * LA_TriIndices[3 * iVertexPosition + 1] + 1] , VP[3 * LA_TriIndices[3 * iVertexPosition + 1] + 2]);
-		if (!bExportLocalCoords)
-			v = MATH::MapObjectPositionToWorldSpace(xfo, v);
+		MATH::CVector3 v;
+		MATH::CTransformation xfo = xobj.GetKinematics().GetGlobal().GetTransform();
 
-		nextTriangle.v[2][0] = (float) v.GetX();
-		nextTriangle.v[2][1] = (float) -v.GetZ();
-		nextTriangle.v[2][2] = (float) v.GetY();
+		for (long iVertexPosition = 0, i_max = LA_TriIndices.GetCount() / 3; iVertexPosition < i_max; iVertexPosition++)
+		{
+			v.Set(VP[3 * LA_TriIndices[3 * iVertexPosition]], VP[3 * LA_TriIndices[3 * iVertexPosition] + 1], VP[3 * LA_TriIndices[3 * iVertexPosition] + 2]);
+			if (!bExportLocalCoords)
+				v = MATH::MapObjectPositionToWorldSpace(xfo, v);
 
-		v.Set(VP[3 * LA_TriIndices[3 * iVertexPosition + 2]], VP[3 * LA_TriIndices[3 * iVertexPosition + 2] + 1] , VP[3 * LA_TriIndices[3 * iVertexPosition + 2] + 2]);
-		if (!bExportLocalCoords)
-			v = MATH::MapObjectPositionToWorldSpace(xfo, v);
+			nextTriangle.v[1][0] = (float)v.GetX();
+			nextTriangle.v[1][1] = (float)-v.GetZ();
+			nextTriangle.v[1][2] = (float)v.GetY();
 
-		nextTriangle.v[3][0] = (float) v.GetX();
-		nextTriangle.v[3][1] = (float) -v.GetZ();
-		nextTriangle.v[3][2] = (float) v.GetY();
+			v.Set(VP[3 * LA_TriIndices[3 * iVertexPosition + 1]], VP[3 * LA_TriIndices[3 * iVertexPosition + 1] + 1], VP[3 * LA_TriIndices[3 * iVertexPosition + 1] + 2]);
+			if (!bExportLocalCoords)
+				v = MATH::MapObjectPositionToWorldSpace(xfo, v);
 
-		if(bExportBinary)
-			fwrite(&nextTriangle, 50, 1, m_pFile);
-		else {
-			Output(m_pFile, "facet normal 0.0 0.0 0.0\n\touter loop\n");
-			Output(m_pFile, string("\t\tvertex ") + to_string(nextTriangle.v[1][0]) + " " + to_string(nextTriangle.v[1][2]) + " " + to_string(-nextTriangle.v[1][1]) + "\n");
-			Output(m_pFile, string("\t\tvertex ") + to_string(nextTriangle.v[2][0]) + " " + to_string(nextTriangle.v[2][2]) + " " + to_string(-nextTriangle.v[2][1]) + "\n");
-			Output(m_pFile, string("\t\tvertex ") + to_string(nextTriangle.v[3][0]) + " " + to_string(nextTriangle.v[3][2]) + " " + to_string(-nextTriangle.v[3][1]) + "\n");
-			Output(m_pFile, "\tendloop\nendfacet");
+			nextTriangle.v[2][0] = (float)v.GetX();
+			nextTriangle.v[2][1] = (float)-v.GetZ();
+			nextTriangle.v[2][2] = (float)v.GetY();
+
+			v.Set(VP[3 * LA_TriIndices[3 * iVertexPosition + 2]], VP[3 * LA_TriIndices[3 * iVertexPosition + 2] + 1], VP[3 * LA_TriIndices[3 * iVertexPosition + 2] + 2]);
+			if (!bExportLocalCoords)
+				v = MATH::MapObjectPositionToWorldSpace(xfo, v);
+
+			nextTriangle.v[3][0] = (float)v.GetX();
+			nextTriangle.v[3][1] = (float)-v.GetZ();
+			nextTriangle.v[3][2] = (float)v.GetY();
+
+			if (bExportBinary)
+				fwrite(&nextTriangle, 50, 1, m_pFile);
+			else {
+				Output(m_pFile, "facet normal 0.0 0.0 0.0\n\touter loop\n");
+				Output(m_pFile, string("\t\tvertex ") + to_string(nextTriangle.v[1][0]) + " " + to_string(nextTriangle.v[1][2]) + " " + to_string(-nextTriangle.v[1][1]) + "\n");
+				Output(m_pFile, string("\t\tvertex ") + to_string(nextTriangle.v[2][0]) + " " + to_string(nextTriangle.v[2][2]) + " " + to_string(-nextTriangle.v[2][1]) + "\n");
+				Output(m_pFile, string("\t\tvertex ") + to_string(nextTriangle.v[3][0]) + " " + to_string(nextTriangle.v[3][2]) + " " + to_string(-nextTriangle.v[3][1]) + "\n");
+				Output(m_pFile, "\tendloop\nendfacet");
+			}
+
+			numTris2++;
+			if (numTris2 % 100000 == 0) { // increment progress bar
+				m_progress.Increment(100000);
+				if (m_progress.IsCancelPressed())
+					return CStatus::False;
+			}
 		}
-
-		numTris2++;
-		if (numTris2 % 100000 == 0) { // increment progress bar
-			m_progress.Increment(100000);
-			if (m_progress.IsCancelPressed())
-				return CStatus::False;
-		}
-	};	
+	}
 
 	if (!bExportBinary)
 		Output(m_pFile, "endsolid " + m_fileName + "\n\n");
 	
+	fseek(m_pFile, 80, SEEK_SET);
+
+	if (bExportBinary)
+		fwrite(&totaltris, sizeof(ULONG), 1, m_pFile);
+
 	m_progress.PutVisible(false);
 
 	fclose(m_pFile);
