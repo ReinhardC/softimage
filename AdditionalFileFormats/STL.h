@@ -48,7 +48,7 @@ public:
 	string getFormatName() { return "STL"; }
 
 	CStatus Execute_Export(CRefArray& inObjects, string initFilePathName, bool bExportBinary, bool bExportLocalCoords);
-	CStatus Execute_Import(string initFilePathName);
+	CStatus Execute_Import(CRefArray& inObjects, string initFilePathName);
 
 private:
 

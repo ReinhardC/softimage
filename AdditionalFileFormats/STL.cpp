@@ -1,9 +1,9 @@
 #include "stl.h"
 
-CStatus CSTL::Execute_Import(string initFilePathName)
+CStatus CSTL::Execute_Import(CRefArray& selectedObjects, string initFilePathName)
 {
 	initStrings(initFilePathName);
-	 
+
 	Application app;
 	Model root = app.GetActiveSceneRoot();
 
@@ -26,16 +26,16 @@ CStatus CSTL::Execute_Import(string initFilePathName)
 	StlTri nextTriangle; // data struct matching STL file data
 	ULONG numTris1 = 0, numTris2 = 0; // two ways to compute # of tris, to be sure
 	long ix = 0; // index counter
-	 
+
 	// check if binary STL format
-	bool bBinary; 
+	bool bBinary;
 	char buf[81];
 	buf[80] = '\0';
 	fgets(buf, 80, m_pFile);
-	CString idLine = buf;	
+	CString idLine = buf;
 	fseek(m_pFile, 80L, SEEK_SET); // skip header
 	fread(&numTris1, sizeof(ULONG), 1, m_pFile);
-	fseek(m_pFile, 0L, SEEK_END); 
+	fseek(m_pFile, 0L, SEEK_END);
 	long fileSize = ftell(m_pFile);
 	if (fileSize != 84 + 50 * numTris1 && idLine.FindString("solid") != UINT_MAX) {
 		bBinary = false;
@@ -47,7 +47,7 @@ CStatus CSTL::Execute_Import(string initFilePathName)
 
 		m_progress.PutMaximum(numTris1);
 	}
-	
+
 	while (!feof(m_pFile))
 	{
 		if (bBinary)
@@ -85,7 +85,7 @@ CStatus CSTL::Execute_Import(string initFilePathName)
 				fclose(m_pFile);
 				return CStatus::False;
 			}
-				
+
 		}
 	}
 
@@ -101,43 +101,79 @@ CStatus CSTL::Execute_Import(string initFilePathName)
 
 	m_progress.PutCaption("Building Mesh");
 
-	// use empty mesh to create the imported mesh
-	X3DObject xobj;
-	root.AddPrimitive(L"EmptyPolygonMesh", CString(m_fileName.c_str()), xobj);
+	if (selectedObjects.GetCount() != 0) {
+		X3DObject xobj(selectedObjects[0]);
 
-	// get a mesh builder from the newly created geometry
-	Primitive prim = xobj.GetActivePrimitive();
-	PolygonMesh mesh = prim.GetGeometry();
-	if (!mesh.IsValid()) {
+		// get a mesh builder from the newly created geometry
+		Primitive prim = xobj.GetActivePrimitive();
+		PolygonMesh mesh = prim.GetGeometry();
+		if (!mesh.IsValid()) {
+			fclose(m_pFile);
+			return CStatus::False;
+		}
+
+		// auto scale mesh 
+		MATH::CVector3 vAutoScaling(1.0, 1.0, 1.0);
+		if (lfExtentX >= 55)
+			vAutoScaling.Set(0.1, 0.1, 0.1);
+		if (lfExtentX >= 150)
+			vAutoScaling.Set(0.01, 0.01, 0.01);
+
+		xobj.PutLocalScaling(vAutoScaling);
+
+		CMeshBuilder meshBuilder = mesh.GetMeshBuilder();
+
+		meshBuilder.AddVertices(ix, positions.data());
+		meshBuilder.AddTriangles(numTris2, indices.data());
+
+		// build mesh
+		CMeshBuilder::CErrorDescriptor err = meshBuilder.Build(true);
+		if (err != CStatus::OK)
+			app.LogMessage(L"Error building the mesh: " + err.GetDescription());
+
+		m_progress.PutVisible(false);
+
 		fclose(m_pFile);
-		return CStatus::False;
+
+		return err;
 	}
-		
+	else {
+		X3DObject xobj;
+		root.AddPrimitive(L"EmptyPolygonMesh", CString(m_fileName.c_str()), xobj);
 
-	// auto scale mesh 
-	MATH::CVector3 vAutoScaling(1.0, 1.0, 1.0);
-	if (lfExtentX >= 55)
-		vAutoScaling.Set(0.1, 0.1, 0.1);
-	if (lfExtentX >= 150)
-		vAutoScaling.Set(0.01, 0.01, 0.01);
+		// get a mesh builder from the newly created geometry
+		Primitive prim = xobj.GetActivePrimitive();
+		PolygonMesh mesh = prim.GetGeometry();
+		if (!mesh.IsValid()) {
+			fclose(m_pFile);
+			return CStatus::False;
+		}
 
-	xobj.PutLocalScaling(vAutoScaling);
+		// auto scale mesh 
+		MATH::CVector3 vAutoScaling(1.0, 1.0, 1.0);
+		if (lfExtentX >= 55)
+			vAutoScaling.Set(0.1, 0.1, 0.1);
+		if (lfExtentX >= 150)
+			vAutoScaling.Set(0.01, 0.01, 0.01);
 
-	CMeshBuilder meshBuilder = mesh.GetMeshBuilder();
+		xobj.PutLocalScaling(vAutoScaling);
 
-	meshBuilder.AddVertices(ix, positions.data());
-	meshBuilder.AddTriangles(numTris2, indices.data());
+		CMeshBuilder meshBuilder = mesh.GetMeshBuilder();
 
-	// build mesh
-	CMeshBuilder::CErrorDescriptor err = meshBuilder.Build(true);
-	if (err != CStatus::OK)
-		app.LogMessage(L"Error building the mesh: " + err.GetDescription());
+		meshBuilder.AddVertices(ix, positions.data());
+		meshBuilder.AddTriangles(numTris2, indices.data());
 
-	m_progress.PutVisible(false);
+		// build mesh
+		CMeshBuilder::CErrorDescriptor err = meshBuilder.Build(true);
+		if (err != CStatus::OK)
+			app.LogMessage(L"Error building the mesh: " + err.GetDescription());
 
-	fclose(m_pFile);
+		m_progress.PutVisible(false);
 
-	return err;
+		fclose(m_pFile);
+
+		return err;
+	}
 }
 
 CStatus CSTL::Execute_Export(CRefArray& inObjects, string initFilePathName, bool bExportBinary, bool bExportLocalCoords)

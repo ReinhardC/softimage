@@ -42,7 +42,7 @@ CStatus COBJ::Execute_Import(string initFilePathName)
 			continue;
 
 		// use empty mesh to create the imported mesh
-		X3DObject xobj;
+		X3DObject xobj;		
 		root.AddPrimitive("EmptyPolygonMesh", CString(pCurrentMesh->name.c_str()), xobj); //  CString(m_fileName.c_str()), xobj);
 
 		Primitive prim = xobj.GetActivePrimitive();

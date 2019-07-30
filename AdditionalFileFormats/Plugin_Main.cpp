@@ -41,6 +41,7 @@ XSIPLUGINCALLBACK CStatus ImportSTL_Init(CRef& in_ctxt)
 	Command cmd = ctxt.GetSource();
 
 	ArgumentArray args = cmd.GetArguments();
+	args.AddWithHandler(L"Objects", siArgHandlerCollection, L"");
 	args.Add(L"FileName");
 
 	cmd.PutDescription(L"ImportSTL([str]FolderAndFilename)");
@@ -54,7 +55,8 @@ XSIPLUGINCALLBACK CStatus ImportSTL_Execute(XSI::CRef& in_ctxt)
 	Context ctxt(in_ctxt);
 	Command cmd = ctxt.GetSource();
 	ArgumentArray args = cmd.GetArguments();
-	CString strFolderAndFileName(args.GetItem(0).GetValue());
+	CRefArray selectedObjects = (CRefArray)args.GetItem(0).GetValue();
+	CString strFolderAndFileName(args.GetItem(1).GetValue());
 
 	if (strFolderAndFileName.IsEmpty()) {
 		app.LogMessage(L"No Filename Specified in Arguments!");
@@ -62,7 +64,7 @@ XSIPLUGINCALLBACK CStatus ImportSTL_Execute(XSI::CRef& in_ctxt)
 	}
 
 	CSTL stl;
-	return stl.Execute_Import(strFolderAndFileName.GetAsciiString());
+	return stl.Execute_Import(selectedObjects, strFolderAndFileName.GetAsciiString());
 }
 
 XSIPLUGINCALLBACK CStatus ExportSTL_Init(CRef& in_ctxt)
