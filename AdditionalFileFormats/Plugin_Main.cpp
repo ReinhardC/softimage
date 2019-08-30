@@ -152,6 +152,7 @@ XSIPLUGINCALLBACK CStatus ImportOBJ_Init(CRef& in_ctxt)
 	Command cmd = ctxt.GetSource();
 
 	ArgumentArray args = cmd.GetArguments();
+	args.AddWithHandler(L"Objects", siArgHandlerCollection, L"");
 	args.Add(L"FileName");
 	args.Add(L"OBJ_ImportUVs", true);
 	args.Add(L"OBJ_ImportUserNormals", true);
@@ -171,22 +172,23 @@ XSIPLUGINCALLBACK CStatus ImportOBJ_Execute(XSI::CRef& in_ctxt)
 	Context ctxt(in_ctxt);
 	Command cmd = ctxt.GetSource();
 	ArgumentArray args = cmd.GetArguments();
-	CString strFolderAndFileName(args.GetItem(0).GetValue());
+	CRefArray selectedObjects = (CRefArray)args.GetItem(0).GetValue();
+	CString strFolderAndFileName(args.GetItem(1).GetValue());
 
 	COBJ obj;
-	obj.Prefs.OBJ_ImportUVs = args.GetItem(1).GetValue();
-	obj.Prefs.OBJ_ImportUserNormals = args.GetItem(2).GetValue();
-	obj.Prefs.OBJ_ImportMask = args.GetItem(3).GetValue();
-	obj.Prefs.OBJ_ImportPolypaint = args.GetItem(4).GetValue();
-	obj.Prefs.OBJ_CreateObjectsTag = args.GetItem(5).GetValue();
-	obj.Prefs.OBJ_CreateClustersTag = args.GetItem(6).GetValue();
+	obj.Prefs.OBJ_ImportUVs = args.GetItem(2).GetValue();
+	obj.Prefs.OBJ_ImportUserNormals = args.GetItem(3).GetValue();
+	obj.Prefs.OBJ_ImportMask = args.GetItem(4).GetValue();
+	obj.Prefs.OBJ_ImportPolypaint = args.GetItem(5).GetValue();
+	obj.Prefs.OBJ_CreateObjectsTag = args.GetItem(6).GetValue();
+	obj.Prefs.OBJ_CreateClustersTag = args.GetItem(7).GetValue();
 
 	if (strFolderAndFileName.IsEmpty()) {
 		app.LogMessage(L"No Filename Specified in Arguments");
 		return CStatus::Unexpected;
 	}
 
-	return obj.Execute_Import(strFolderAndFileName.GetAsciiString());
+	return obj.Execute_Import(selectedObjects, strFolderAndFileName.GetAsciiString());
 }
 
 XSIPLUGINCALLBACK CStatus ImportPLY_Init(CRef& in_ctxt)

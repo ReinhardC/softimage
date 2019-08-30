@@ -513,8 +513,15 @@ function ShowImportSTLFileBrowser( in_ctxt )
 	oFileBrowser.InitialDirectory = getInitialDir( "STL" );
 	oFileBrowser.Filter = "Stereolithography Format (*.stl)|*.stl||";
 	oFileBrowser.ShowOpen();
-	if (oFileBrowser.FilePathName != "") {
-		ImportSTL (oFileBrowser.FilePathName);
+	if (oFileBrowser.FilePathName != "") {	
+		if(Selection.Count > 0) {
+			var btn = XSIUIToolkit.Msgbox( "Update first selected object with new mesh?", siMsgYesNoCancel | siMsgQuestion, "Import STL" ) ;
+			if ( btn == siMsgNo )
+				DeselectAll();
+			else if ( btn == siMsgCancel)
+				return;
+		}
+		ImportSTL (Selection, oFileBrowser.FilePathName);
 		saveInitialDir ("STL", oFileBrowser.FilePath);
 	}
 
@@ -575,7 +582,19 @@ function ShowImportOBJFileBrowser( in_ctxt )
 	}
 
 	if (oFileBrowser.FilePathName != "") {
-		ImportOBJ (oFileBrowser.FilePathName, 
+		if(Selection.Count > 0) {
+			var btn = XSIUIToolkit.Msgbox( "Update first selected object with new mesh?", siMsgYesNoCancel | siMsgQuestion, "Import STL" ) ;
+			if ( btn == siMsgNo )
+				DeselectAll();
+			else if ( btn == siMsgYes) {
+				createObjectsTag = "______"; 
+				createClustersTag = "______";
+			}
+			else if ( btn == siMsgCancel)
+				return;
+		}
+		
+		ImportOBJ (Selection, oFileBrowser.FilePathName, 
 			Application.Preferences.GetPreferenceValue("File Format Options.OBJ_ImportUVs"), 
 			Application.Preferences.GetPreferenceValue("File Format Options.OBJ_ImportUserNormals"), 
 			Application.Preferences.GetPreferenceValue("File Format Options.OBJ_ImportMask"), 

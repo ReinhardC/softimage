@@ -3,7 +3,7 @@
 //TODO: remove memory leaks (news without delete)
 //TODO: reserve memory for push_back for performance
 
-CStatus COBJ::Execute_Import(string initFilePathName)
+CStatus COBJ::Execute_Import(CRefArray& selectedObjects, string initFilePathName)
 {
 	Application app;
 
@@ -11,14 +11,14 @@ CStatus COBJ::Execute_Import(string initFilePathName)
 
 	// look up mesh definitions, might reoccur while parsing obj file
 	unordered_map<string, MeshData*> mesh_from_name;
-
+ 
 	// store material definitions by parsing mat file 
 	unordered_map<string, string> json_from_mat_name;
 
 	// look up which clusters/objects will be assigned which material
 	unordered_map<string, CRefArray> scene_refs_from_mat_name;
 
-	CFileFormat::initStrings(initFilePathName);
+	CFileFormat::initStrings(initFilePathName); 
 
 	vAutoScaling.Set(1.0, 1.0, 1.0);
 
@@ -41,13 +41,20 @@ CStatus COBJ::Execute_Import(string initFilePathName)
 		if (pCurrentMesh->PolygonPointCounts.size() == 0)
 			continue;
 
-		// use empty mesh to create the imported mesh
-		X3DObject xobj;		
-		root.AddPrimitive("EmptyPolygonMesh", CString(pCurrentMesh->name.c_str()), xobj); //  CString(m_fileName.c_str()), xobj);
-
-		Primitive prim = xobj.GetActivePrimitive();
+		Primitive prim;
+		if (selectedObjects.GetCount() != 0) {
+			X3DObject xobj(selectedObjects[0]);
+			xobj.PutLocalScaling(vAutoScaling);
+			prim = xobj.GetActivePrimitive();
+		}
+		else {
+			X3DObject xobj;
+			xobj.PutLocalScaling(vAutoScaling);
+			root.AddPrimitive(L"EmptyPolygonMesh", CString(m_fileName.c_str()), xobj);
+			prim = xobj.GetActivePrimitive();
+		}
+		
 		PolygonMesh mesh = prim.GetGeometry();
-		xobj.PutLocalScaling(vAutoScaling);
 
 		CMeshBuilder meshBuilder = mesh.GetMeshBuilder();
 
@@ -80,7 +87,7 @@ CStatus COBJ::Execute_Import(string initFilePathName)
 				scene_refs_from_mat_name[mat_name].Add(cls);
 			}
 			else // don't create 100% coverage clusters, use object itself (TODO: add preferernce for this)
-				scene_refs_from_mat_name[mat_name].Add(xobj);
+				scene_refs_from_mat_name[mat_name].Add(prim.GetParent3DObject());
 		}
 
 		CClusterPropertyBuilder cpBuilder = mesh.GetClusterPropertyBuilder();
@@ -402,8 +409,11 @@ CStatus COBJ::Import(string filePathNam,
 			string name(nbTokens > 1 ? secondToken : m_fileName);
 
 			if (mesh_map.count(name) == 0) {
-				if (pCurrentMesh->bIsDefaultMesh)
+				if (pCurrentMesh->bIsDefaultMesh) {
+					mesh_map.erase(pCurrentMesh->name);
 					pCurrentMesh->name = name;
+					
+				}
 				else
 					pCurrentMesh = new MeshData(name);
 

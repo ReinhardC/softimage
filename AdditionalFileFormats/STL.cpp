@@ -92,6 +92,11 @@ CStatus CSTL::Execute_Import(CRefArray& selectedObjects, string initFilePathName
 	numTris2--;
 
 	lfExtentX = lfMaxExtentX - lfMinExtentX; // for auto scale
+	MATH::CVector3 vAutoScaling(1.0, 1.0, 1.0);
+	if (lfExtentX >= 55)
+		vAutoScaling.Set(0.1, 0.1, 0.1);
+	if (lfExtentX >= 150)
+		vAutoScaling.Set(0.01, 0.01, 0.01);
 
 	if (bBinary && (numTris1 != numTris2)) {
 		app.LogMessage(L"File has different number of triangles than specified in header (specified=" + CString(numTris1) + L", found=" + CString(numTris2) + L")");
@@ -100,80 +105,44 @@ CStatus CSTL::Execute_Import(CRefArray& selectedObjects, string initFilePathName
 	}
 
 	m_progress.PutCaption("Building Mesh");
-
+	
+	Primitive prim;
 	if (selectedObjects.GetCount() != 0) {
 		X3DObject xobj(selectedObjects[0]);
-
-		// get a mesh builder from the newly created geometry
-		Primitive prim = xobj.GetActivePrimitive();
-		PolygonMesh mesh = prim.GetGeometry();
-		if (!mesh.IsValid()) {
-			fclose(m_pFile);
-			return CStatus::False;
-		}
-
-		// auto scale mesh 
-		MATH::CVector3 vAutoScaling(1.0, 1.0, 1.0);
-		if (lfExtentX >= 55)
-			vAutoScaling.Set(0.1, 0.1, 0.1);
-		if (lfExtentX >= 150)
-			vAutoScaling.Set(0.01, 0.01, 0.01);
-
 		xobj.PutLocalScaling(vAutoScaling);
-
-		CMeshBuilder meshBuilder = mesh.GetMeshBuilder();
-
-		meshBuilder.AddVertices(ix, positions.data());
-		meshBuilder.AddTriangles(numTris2, indices.data());
-
-		// build mesh
-		CMeshBuilder::CErrorDescriptor err = meshBuilder.Build(true);
-		if (err != CStatus::OK)
-			app.LogMessage(L"Error building the mesh: " + err.GetDescription());
-
-		m_progress.PutVisible(false);
-
-		fclose(m_pFile);
-
-		return err;
+		// get a mesh builder from the newly created geometry
+		prim = xobj.GetActivePrimitive();
 	}
 	else {
 		X3DObject xobj;
+		xobj.PutLocalScaling(vAutoScaling);
 		root.AddPrimitive(L"EmptyPolygonMesh", CString(m_fileName.c_str()), xobj);
 
 		// get a mesh builder from the newly created geometry
-		Primitive prim = xobj.GetActivePrimitive();
-		PolygonMesh mesh = prim.GetGeometry();
-		if (!mesh.IsValid()) {
-			fclose(m_pFile);
-			return CStatus::False;
-		}
-
-		// auto scale mesh 
-		MATH::CVector3 vAutoScaling(1.0, 1.0, 1.0);
-		if (lfExtentX >= 55)
-			vAutoScaling.Set(0.1, 0.1, 0.1);
-		if (lfExtentX >= 150)
-			vAutoScaling.Set(0.01, 0.01, 0.01);
-
-		xobj.PutLocalScaling(vAutoScaling);
-
-		CMeshBuilder meshBuilder = mesh.GetMeshBuilder();
-
-		meshBuilder.AddVertices(ix, positions.data());
-		meshBuilder.AddTriangles(numTris2, indices.data());
-
-		// build mesh
-		CMeshBuilder::CErrorDescriptor err = meshBuilder.Build(true);
-		if (err != CStatus::OK)
-			app.LogMessage(L"Error building the mesh: " + err.GetDescription());
-
-		m_progress.PutVisible(false);
-
-		fclose(m_pFile);
-
-		return err;
+		prim = xobj.GetActivePrimitive();
 	}
+
+	PolygonMesh mesh = prim.GetGeometry();
+	if (!mesh.IsValid()) {
+		fclose(m_pFile);
+		return CStatus::False;
+	}
+
+	CMeshBuilder meshBuilder = mesh.GetMeshBuilder();
+
+	meshBuilder.AddVertices(ix, positions.data());
+	meshBuilder.AddTriangles(numTris2, indices.data());
+
+	// build mesh
+	CMeshBuilder::CErrorDescriptor err = meshBuilder.Build(true);
+	if (err != CStatus::OK)
+		app.LogMessage(L"Error building the mesh: " + err.GetDescription());
+
+	m_progress.PutVisible(false);
+
+	fclose(m_pFile);
+
+	return err;
 }
 
 CStatus CSTL::Execute_Export(CRefArray& inObjects, string initFilePathName, bool bExportBinary, bool bExportLocalCoords)

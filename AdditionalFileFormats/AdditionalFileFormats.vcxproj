@@ -206,9 +206,6 @@
     <ClInclude Include="PLY.h" />
     <ClInclude Include="STL.h" />
   </ItemGroup>
-  <ItemGroup>
-    <Text Include="OBJ.txt" />
-  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
