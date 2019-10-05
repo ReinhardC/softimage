@@ -344,6 +344,15 @@ CStatus COBJ::Import(string filePathNam,
 
 			if (x < lfMinExtentX) // for auto scale
 				lfMinExtentX = x;
+			
+			if (tokens.size() == 7) {
+				bFileHasPolypaint = true;
+				MRGB_inFile.push_back(1.0);
+				MRGB_inFile.push_back((float)atof(tokens[4]));
+				MRGB_inFile.push_back((float)atof(tokens[5]));
+				MRGB_inFile.push_back((float)atof(tokens[6]));
+				nbMRGB_inFile++;
+			}
 
 			nbPP_inFile++;
 		}

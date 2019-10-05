@@ -3,3 +3,4 @@ Version 2.1 - fixes 1 off error reading obj
 Version 2.2 - more fixes reading obj, changed preferences (might have to delete File Format Preferences.prefs)
 Version 2.3 - some speed improvements reading obj
 Version 3.0 - bugfixes + added material support for obj 
+Version 4.0 - mesh replace feature for stl/obj (select mesh before import)
