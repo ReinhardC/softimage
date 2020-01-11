@@ -64,8 +64,9 @@ public:
 	vector<long> PolygonPointCounts;
 	vector<double> PointPositions;
 	vector<long> PointIndices;
-	long ixPointPosition_next = 0;
-	unordered_map<long, long> ixPointPosition_lookup;
+	long next_meshIx = 0;
+	unordered_map<long, long> meshIxFromFileIx_lookup;
+	unordered_map<long, long> fileIxFromMeshIx_lookup;
 	unordered_map<string, CLongArray> IcsMaterialClusters;
 
 	bool bHasNormals = false;
@@ -87,6 +88,8 @@ class COBJ : public CFileFormat
 	bool bFileHasUVs = false;
 	bool bFileHasNormals = false;
 	bool bFileHasPolypaint = false;
+
+	vector<double> PP_inFile;
 
 	MATH::CVector3 vAutoScaling; // auto scale meshes
 

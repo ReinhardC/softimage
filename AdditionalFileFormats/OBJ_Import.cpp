@@ -30,13 +30,15 @@ CStatus COBJ::Execute_Import(CRefArray& selectedObjects, string initFilePathName
 		Import(m_filePath + mat_file, mesh_from_name, json_from_mat_name, mat_file);
 
 	Model root = app.GetActiveSceneRoot();
+	
+	int nbMeshes = mesh_from_name.size();
 
 	int ix = 1;
 	for (auto p : mesh_from_name) {
 
 		MeshData* pCurrentMesh = p.second;
 
-		m_progress.PutCaption("Importing OBJ (Building Mesh " + CString(ix++) + " of " + CString(mesh_from_name.size()) + ")");
+		m_progress.PutCaption("Importing OBJ (Building Mesh " + CString(ix++) + " of " + CString(nbMeshes) + ")");
 
 		if (pCurrentMesh->PolygonPointCounts.size() == 0)
 			continue;
@@ -58,7 +60,22 @@ CStatus COBJ::Execute_Import(CRefArray& selectedObjects, string initFilePathName
 
 		CMeshBuilder meshBuilder = mesh.GetMeshBuilder();
 
-		meshBuilder.AddVertices(pCurrentMesh->PointPositions.size() / 3, &pCurrentMesh->PointPositions[0]);
+		if(nbMeshes == 1) {
+			if(pCurrentMesh->PointPositions.size() == PP_inFile.size()) {
+				/* restore original file vertex order (important for zbrush base mesh reimport for example) */
+				for (auto i = 0; i < pCurrentMesh->PointIndices.size(); i++) {
+					pCurrentMesh->PointIndices[i] = pCurrentMesh->fileIxFromMeshIx_lookup[pCurrentMesh->PointIndices[i]];
+				}
+				meshBuilder.AddVertices(PP_inFile.size() / 3, &PP_inFile[0]);
+			}
+			else {
+				app.LogMessage("Warning couldn't restore original point order because the file contains unused vertices.", siWarningMsg);
+				meshBuilder.AddVertices(pCurrentMesh->PointPositions.size() / 3, &pCurrentMesh->PointPositions[0]);
+			}
+		}
+		else
+			meshBuilder.AddVertices(pCurrentMesh->PointPositions.size() / 3, &pCurrentMesh->PointPositions[0]);
+
 		meshBuilder.AddPolygons(pCurrentMesh->PolygonPointCounts.size(), &pCurrentMesh->PolygonPointCounts[0], &pCurrentMesh->PointIndices[0]);
 
 		// build mesh
@@ -172,7 +189,6 @@ CStatus COBJ::Import(string filePathNam,
 	string currentMatName = "";
 	string currentMatTagName = "";
 
-	vector<double> PP_inFile;
 	vector<float> UVs_inFile, MRGB_inFile, Normals_inFile;
 	long nbPP_inFile = 0, nbUVs_inFile = 0, nbMRGB_inFile = 0, nbNormals_inFile = 0; // probably faster than using Count() methods
 
@@ -239,35 +255,44 @@ CStatus COBJ::Import(string filePathNam,
 
 				vector<char*>& qTriple = quickSplit(tokens[i], '/'); // speed opt std::string => char*
 
-																	 // ** Triple format: ********** 
-																	 // **
-																	 // ** PointIndex / UVIndex / NormalIndex
+																	 // ** Face format: ********** 																     
+																	 // (PointIndex/UVIndex/NormalIndex)
+
+																	 // example line:  * f 110/37073/2992 766/37074/2958 658/37075/2885 657/37076/2818
+
+																	 // alt. examples: * 110 (no UV, no Normals)  
+																	 //				   * 110/37073 (UVs but no Normals)
+																	 //				   * 110//2992 (Normals but no UVs)   
+
 																	 // ** Note these are indices of elements in the 3 main file arrays, not the individual objects.
 
 				size_t nbTripleEls = qTriple.size();
-
-				long PointIndexFile = atol(qTriple[0]) - 1;
-				long PointIndexMesh;
-				if (pCurrentMesh->ixPointPosition_lookup.count(PointIndexFile) == 0) {
-					PointIndexMesh = pCurrentMesh->ixPointPosition_next;
-					pCurrentMesh->ixPointPosition_lookup.insert({ PointIndexFile, pCurrentMesh->ixPointPosition_next++ });
-					if (PointIndexFile < nbPP_inFile) {
-						pCurrentMesh->PointPositions.push_back(PP_inFile[3 * PointIndexFile]);
-						pCurrentMesh->PointPositions.push_back(PP_inFile[3 * PointIndexFile + 1]);
-						pCurrentMesh->PointPositions.push_back(PP_inFile[3 * PointIndexFile + 2]);
+				
+				long fileIx = atol(qTriple[0]) - 1;
+				long meshIx;
+				if (pCurrentMesh->meshIxFromFileIx_lookup.count(fileIx) == 0) {
+					meshIx = pCurrentMesh->next_meshIx;
+					pCurrentMesh->next_meshIx++;
+					pCurrentMesh->fileIxFromMeshIx_lookup.insert({ meshIx, fileIx });
+					pCurrentMesh->meshIxFromFileIx_lookup.insert({ fileIx, meshIx });					
+					if (fileIx < nbPP_inFile) {
+						pCurrentMesh->PointPositions.push_back(PP_inFile[3 * fileIx]);
+						pCurrentMesh->PointPositions.push_back(PP_inFile[3 * fileIx + 1]);
+						pCurrentMesh->PointPositions.push_back(PP_inFile[3 * fileIx + 2]);
 					}
 					else {
 						app.LogMessage(L"A polygon in line " + CString(line_in_file + 1) + " inside " + CString(m_fileNameWithExt.c_str()) + L" is defined with not enough point position vector entries present. Import is incomplete.", siErrorMsg);
 						return CStatus::Fail;
 					}
 
-					if (bFileHasPolypaint && PointIndexFile < nbMRGB_inFile)
-						pCurrentMesh->Mask.push_back(MRGB_inFile[4 * PointIndexFile]);
+					if (bFileHasPolypaint && fileIx < nbMRGB_inFile)
+						pCurrentMesh->Mask.push_back(MRGB_inFile[4 * fileIx]);
 				}
 				else
-					PointIndexMesh = pCurrentMesh->ixPointPosition_lookup[PointIndexFile];
+					meshIx = pCurrentMesh->meshIxFromFileIx_lookup[fileIx];
 
-				pCurrentMesh->PointIndices.push_back(PointIndexMesh);
+				pCurrentMesh->PointIndices.push_back(meshIx);
+
 				if (Prefs.OBJ_ImportUVs)
 					if (nbTripleEls > 1 && *(qTriple[1]) != '\0' && bFileHasUVs) {
 						pCurrentMesh->bHasUVs = true;
@@ -312,10 +337,10 @@ CStatus COBJ::Import(string filePathNam,
 
 						if (Prefs.OBJ_ImportPolypaint || Prefs.OBJ_ImportMask)
 							if (bFileHasPolypaint) {
-								if (PointIndexFile < nbMRGB_inFile) {
-									pCurrentMesh->RGBA.push_back(MRGB_inFile[4 * PointIndexFile + 1]);
-									pCurrentMesh->RGBA.push_back(MRGB_inFile[4 * PointIndexFile + 2]);
-									pCurrentMesh->RGBA.push_back(MRGB_inFile[4 * PointIndexFile + 3]);
+								if (fileIx < nbMRGB_inFile) {
+									pCurrentMesh->RGBA.push_back(MRGB_inFile[4 * fileIx + 1]);
+									pCurrentMesh->RGBA.push_back(MRGB_inFile[4 * fileIx + 2]);
+									pCurrentMesh->RGBA.push_back(MRGB_inFile[4 * fileIx + 3]);
 									pCurrentMesh->RGBA.push_back(255.0);
 								}
 								else {
