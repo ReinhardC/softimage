@@ -39,7 +39,10 @@ CStatus COBJ::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 		// Get a geometry accessor from the selected object	
 		XSI::Primitive prim = xobj.GetActivePrimitive();
 		XSI::PolygonMesh mesh = prim.GetGeometry();
-		if (!mesh.IsValid()) return CStatus::False;
+		if (!mesh.IsValid()) {
+			fails++;
+			continue;
+		}
 
 		m_progress.PutCaption("Exporting OBJ (" + xobj.GetName() + ")");
 		m_progress.Increment();
@@ -310,10 +313,8 @@ CStatus COBJ::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 	if (bWriteMTLFile)
 		fclose(m_matfile);
 
-	if (fails == 0)
-		return CStatus::OK;
-	else {
-		app.LogMessage("OBJ File output for " + CString(fails) + " objects failed.", siErrorMsg);
-		return CStatus::Fail;
-	}
+	if (fails != 0)
+		app.LogMessage("OBJ file export successful but " + CString(fails) + " objects failed (nulls or other items were selected).", siWarningMsg);
+
+	return CStatus::OK;
 }

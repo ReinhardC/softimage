@@ -281,7 +281,7 @@ CStatus COBJ::Import(string filePathNam,
 						pCurrentMesh->PointPositions.push_back(PP_inFile[3 * fileIx + 2]);
 					}
 					else {
-						app.LogMessage(L"A polygon in line " + CString(line_in_file + 1) + " inside " + CString(m_fileNameWithExt.c_str()) + L" is defined with not enough point position vector entries present. Import is incomplete.", siErrorMsg);
+						app.LogMessage(L"A polygon in line " + CString(line_in_file + 1) + " inside " + CString(m_fileNameWithExt.c_str()) + L" is defined with missing point position vector entries. Import is incomplete.", siErrorMsg);
 						return CStatus::Fail;
 					}
 
@@ -303,8 +303,9 @@ CStatus COBJ::Import(string filePathNam,
 							pCurrentMesh->UVs.push_back(UVs_inFile[3 * UVIndex + 2]);
 						}
 						else {
-							app.LogMessage(L"A polygon in line " + CString(line_in_file + 1) + " inside " + CString(m_fileNameWithExt.c_str()) + L" is defined with not enough UV coordinate entries present. Import is incomplete.", siErrorMsg);
-							return CStatus::Fail;
+							app.LogMessage(L"A polygon in line " + CString(line_in_file + 1) + " inside " + CString(m_fileNameWithExt.c_str()) + L" is defined with missing UV coordinates. Loading UVs is disabled for the rest of this import.", siErrorMsg);
+							Prefs.OBJ_ImportUVs = false;
+							//return CStatus::Fail; .. stop importing UVs instead of fail
 						}
 					}
 					else {
@@ -325,8 +326,9 @@ CStatus COBJ::Import(string filePathNam,
 								pCurrentMesh->Normals.push_back(Normals_inFile[3 * NormalIndex + 2]);
 							}
 							else {
-								app.LogMessage(L"A polygon in line " + CString(line_in_file + 1) + " inside " + CString(m_fileNameWithExt.c_str()) + L" is defined with not enough normal vector entries present. Import is incomplete.", siErrorMsg);
-								return CStatus::Fail;
+								app.LogMessage(L"A polygon in line " + CString(line_in_file + 1) + " inside " + CString(m_fileNameWithExt.c_str()) + L" is defined with missing normal vector entries. Loading normals is disabled for the rest of this import.", siErrorMsg);
+								Prefs.OBJ_ImportUserNormals = false;
+								// return CStatus::Fail; .. stop importing normals instead of fail
 							}
 						}
 						else {
@@ -344,8 +346,10 @@ CStatus COBJ::Import(string filePathNam,
 									pCurrentMesh->RGBA.push_back(255.0);
 								}
 								else {
-									app.LogMessage(L"A polygon in line " + CString(line_in_file + 1) + " inside " + CString(m_fileNameWithExt.c_str()) + L" is defined with not enough polypaint color entries present. Import is incomplete.", siErrorMsg);
-									return CStatus::Fail;
+									app.LogMessage(L"A polygon in line " + CString(line_in_file + 1) + " inside " + CString(m_fileNameWithExt.c_str()) + L" is defined with missing polypaint color entries. Loading polypaint/mask is diabled for the rest of this import.", siErrorMsg);
+									Prefs.OBJ_ImportPolypaint = false;
+									Prefs.OBJ_ImportMask = false;
+									// return CStatus::Fail; .. continue instead of failing
 								}
 							}
 			}
