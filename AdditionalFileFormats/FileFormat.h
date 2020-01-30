@@ -53,6 +53,7 @@ public:
 	virtual string getFormatName() = 0;
 
 	CRef getVertexColorProperty(X3DObject xobj);
+	CRef getMaskProperty(X3DObject xobj);
 
 protected:
 	void initStrings(string in_filePathName) {

@@ -60,22 +60,20 @@ CStatus COBJ::Execute_Import(CRefArray& selectedObjects, string initFilePathName
 
 		CMeshBuilder meshBuilder = mesh.GetMeshBuilder();
 
-		if(nbMeshes == 1) {
-			if(pCurrentMesh->PointPositions.size() == PP_inFile.size()) {
-				/* restore original file vertex order (important for zbrush base mesh reimport for example) */
-				for (auto i = 0; i < pCurrentMesh->PointIndices.size(); i++) {
-					pCurrentMesh->PointIndices[i] = pCurrentMesh->fileIxFromMeshIx_lookup[pCurrentMesh->PointIndices[i]];
-				}
-				meshBuilder.AddVertices(PP_inFile.size() / 3, &PP_inFile[0]);
+		bool bImportWithOriginalPointOrder = (nbMeshes == 1 && pCurrentMesh->PointPositions.size() == PP_inFile.size() && pCurrentMesh->Mask.size() == Mask_inFile.size());
+		
+		if(bImportWithOriginalPointOrder) {
+			app.LogMessage("Found only 1 mesh. We can import using the original point order", siWarningMsg);
+			// restore original file vertex order (important for zbrush base mesh reimport for example) 
+			for (auto i = 0; i < pCurrentMesh->PointIndices.size(); i++) {
+				pCurrentMesh->PointIndices[i] = pCurrentMesh->fileIxFromMeshIx_lookup[pCurrentMesh->PointIndices[i]];
 			}
-			else {
-				app.LogMessage("Warning couldn't restore original point order because the file contains unused vertices.", siWarningMsg);
-				meshBuilder.AddVertices(pCurrentMesh->PointPositions.size() / 3, &pCurrentMesh->PointPositions[0]);
-			}
+			meshBuilder.AddVertices(PP_inFile.size() / 3, &PP_inFile[0]);
 		}
-		else
+		else {			
 			meshBuilder.AddVertices(pCurrentMesh->PointPositions.size() / 3, &pCurrentMesh->PointPositions[0]);
-
+		}
+		
 		meshBuilder.AddPolygons(pCurrentMesh->PolygonPointCounts.size(), &pCurrentMesh->PolygonPointCounts[0], &pCurrentMesh->PointIndices[0]);
 
 		// build mesh
@@ -121,7 +119,10 @@ CStatus COBJ::Execute_Import(CRefArray& selectedObjects, string initFilePathName
 
 		if (Prefs.OBJ_ImportMask && bFileHasPolypaint) {
 			ClusterProperty weights = cpBuilder.AddWeightMap(CString("Mask"), CString("WeightMapCls"));
-			weights.SetValues(&pCurrentMesh->Mask[0], pCurrentMesh->Mask.size());
+			if (bImportWithOriginalPointOrder)
+				weights.SetValues(&Mask_inFile[0], Mask_inFile.size());
+			else
+				weights.SetValues(&pCurrentMesh->Mask[0], pCurrentMesh->Mask.size());
 		}
 
 		if (Prefs.OBJ_ImportUserNormals && pCurrentMesh->bHasNormals) {
@@ -189,8 +190,8 @@ CStatus COBJ::Import(string filePathNam,
 	string currentMatName = "";
 	string currentMatTagName = "";
 
-	vector<float> UVs_inFile, MRGB_inFile, Normals_inFile;
-	long nbPP_inFile = 0, nbUVs_inFile = 0, nbMRGB_inFile = 0, nbNormals_inFile = 0; // probably faster than using Count() methods
+	vector<float> UVs_inFile, Normals_inFile;
+	long nbPP_inFile = 0, nbUVs_inFile = 0, nbRGB_inFile = 0, nbMask_inFile = 0, nbNormals_inFile = 0; // probably faster than using Count() methods
 
 	unordered_map<string, bool> unsupportedTokens;
 
@@ -285,8 +286,8 @@ CStatus COBJ::Import(string filePathNam,
 						return CStatus::Fail;
 					}
 
-					if (bFileHasPolypaint && fileIx < nbMRGB_inFile)
-						pCurrentMesh->Mask.push_back(MRGB_inFile[4 * fileIx]);
+					if (bFileHasPolypaint && fileIx < nbMask_inFile)
+						pCurrentMesh->Mask.push_back(Mask_inFile[fileIx]);
 				}
 				else
 					meshIx = pCurrentMesh->meshIxFromFileIx_lookup[fileIx];
@@ -339,10 +340,10 @@ CStatus COBJ::Import(string filePathNam,
 
 						if (Prefs.OBJ_ImportPolypaint || Prefs.OBJ_ImportMask)
 							if (bFileHasPolypaint) {
-								if (fileIx < nbMRGB_inFile) {
-									pCurrentMesh->RGBA.push_back(MRGB_inFile[4 * fileIx + 1]);
-									pCurrentMesh->RGBA.push_back(MRGB_inFile[4 * fileIx + 2]);
-									pCurrentMesh->RGBA.push_back(MRGB_inFile[4 * fileIx + 3]);
+								if (fileIx < nbRGB_inFile) {
+									pCurrentMesh->RGBA.push_back(RGB_inFile[3 * fileIx]);
+									pCurrentMesh->RGBA.push_back(RGB_inFile[3 * fileIx + 1]);
+									pCurrentMesh->RGBA.push_back(RGB_inFile[3 * fileIx + 2]);
 									pCurrentMesh->RGBA.push_back(255.0);
 								}
 								else {
@@ -376,11 +377,12 @@ CStatus COBJ::Import(string filePathNam,
 			
 			if (tokens.size() == 7) {
 				bFileHasPolypaint = true;
-				MRGB_inFile.push_back(1.0);
-				MRGB_inFile.push_back((float)atof(tokens[4]));
-				MRGB_inFile.push_back((float)atof(tokens[5]));
-				MRGB_inFile.push_back((float)atof(tokens[6]));
-				nbMRGB_inFile++;
+				Mask_inFile.push_back(1.0);
+				RGB_inFile.push_back((float)atof(tokens[4]));
+				RGB_inFile.push_back((float)atof(tokens[5]));
+				RGB_inFile.push_back((float)atof(tokens[6]));
+				nbRGB_inFile++;
+				nbMask_inFile++;
 			}
 
 			nbPP_inFile++;
@@ -434,12 +436,12 @@ CStatus COBJ::Import(string filePathNam,
 			for (size_t i = 0, i_max = strlen(secondToken) / 8; i < i_max; i++)
 			{
 				size_t o = 8 * i;
-				MRGB_inFile.push_back(1.0f - (16.0f * hex2dec(secondToken[o]) + hex2dec(secondToken[o + 1])) / 255.0f);
-				MRGB_inFile.push_back((16.0f * hex2dec(secondToken[o + 2]) + hex2dec(secondToken[o + 3])) / 255.0f);
-				MRGB_inFile.push_back((16.0f * hex2dec(secondToken[o + 4]) + hex2dec(secondToken[o + 5])) / 255.0f);
-				MRGB_inFile.push_back((16.0f * hex2dec(secondToken[o + 6]) + hex2dec(secondToken[o + 7])) / 255.0f);
-
-				nbMRGB_inFile++;
+				Mask_inFile.push_back(1.0f - (16.0f * hex2dec(secondToken[o]) + hex2dec(secondToken[o + 1])) / 255.0f);
+				RGB_inFile.push_back((16.0f * hex2dec(secondToken[o + 2]) + hex2dec(secondToken[o + 3])) / 255.0f);
+				RGB_inFile.push_back((16.0f * hex2dec(secondToken[o + 4]) + hex2dec(secondToken[o + 5])) / 255.0f);
+				RGB_inFile.push_back((16.0f * hex2dec(secondToken[o + 6]) + hex2dec(secondToken[o + 7])) / 255.0f);
+				nbMask_inFile++;
+				nbRGB_inFile++;
 			}
 		}
 		else if (STR_EQUAL(firstToken, new_object_tag))

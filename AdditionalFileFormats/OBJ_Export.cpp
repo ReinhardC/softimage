@@ -2,7 +2,7 @@
 
 #define log app.LogMessage
 
-CStatus COBJ::Execute_Export(CRefArray& inObjects, string initFilePathName, bool bExportVertexColors, bool bSeparateFiles, bool bWriteMTLFile, bool bExportLocalCoords)
+CStatus COBJ::Execute_Export(CRefArray& inObjects, string initFilePathName, bool bExportMask, bool bExportVertexColors, bool bSeparateFiles, bool bWriteMTLFile, bool bExportLocalCoords)
 {
 	XSI::Application app;
 
@@ -88,11 +88,15 @@ CStatus COBJ::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 		// * Export Mask and Vertex Colors in ZBrush Polypaint format
 		// * can be read by 3dcoat, sculptgl, xnormal, meshmixer, but NOT by ZBrush!
 
-		if (bExportVertexColors) {
+		if (bExportVertexColors || bExportMask) {
 
-			ClusterProperty foundProperty(CFileFormat::getVertexColorProperty(xobj));
+			ClusterProperty foundMaskProperty(CFileFormat::getMaskProperty(xobj));
+			ClusterProperty foundRGBProperty(CFileFormat::getVertexColorProperty(xobj));
 
-			if (foundProperty.IsValid()) {
+			bool bMaskValid = foundMaskProperty.IsValid();
+			bool bRGBValid = foundRGBProperty.IsValid();
+
+			if (bMaskValid || bRGBValid) {
 
 				m_progress.PutCaption("Exporting OBJ (Vertex Colors of '" + xobj.GetName() + "')");
 
@@ -100,43 +104,67 @@ CStatus COBJ::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 
 				Output(m_pFile, "\r\n# The following MRGB block contains ZBrush Vertex Color (Polypaint) and masking output as 4 hexadecimal values per vertex. The vertex color format is MMRRGGBB with up to 64 entries per MRGB line.\r\n");
 
-				CFloatArray FA_RGB_ordered;
-				CLongArray LA_RGBCounts_ordered;
-				CFloatArray FA_RGBA;
-				CBitArray flags_RGBA;
+				CFloatArray FA_RGB_perPoint;
+				CLongArray LA_RGBCounts_perPoint;
+				CFloatArray FA_Mask, FA_RGBA_perSample;
+				CBitArray flags_Mask, flags_RGBA_perSample;
 
-				foundProperty.GetValues(FA_RGBA, flags_RGBA);
+				int i_max;
 
-				FA_RGB_ordered.Resize(3 * mesh.GetPoints().GetCount());
-				for (long i = 0, i_max = FA_RGB_ordered.GetCount(); i < i_max; i++)
-					FA_RGB_ordered[i] = 0.0;
+				if (bMaskValid) {
+					foundMaskProperty.GetValues(FA_Mask, flags_Mask);
+					i_max = FA_Mask.GetCount();
+				}
 
-				LA_RGBCounts_ordered.Resize(mesh.GetPoints().GetCount());
-				for (long i = 0, i_max = LA_RGBCounts_ordered.GetCount(); i < i_max; i++)
-					LA_RGBCounts_ordered[i] = 0;
+				if (bRGBValid) {
+					foundRGBProperty.GetValues(FA_RGBA_perSample, flags_RGBA_perSample);
 
-				// reorder sample property to vertices (average)
-				for (long iRGBA = 0, iRGBA_max = FA_RGBA.GetCount() / 4; iRGBA < iRGBA_max; iRGBA++) {
+					FA_RGB_perPoint.Resize(3 * mesh.GetPoints().GetCount());
+					for (long i = 0, i_max = FA_RGB_perPoint.GetCount(); i < i_max; i++)
+						FA_RGB_perPoint[i] = 0.0;
 
-					LA_RGBCounts_ordered[LA_Indices[iRGBA]] += 1;
-					FA_RGB_ordered[3 * LA_Indices[iRGBA] + 0] += FA_RGBA[4 * iRGBA + 0];
-					FA_RGB_ordered[3 * LA_Indices[iRGBA] + 1] += FA_RGBA[4 * iRGBA + 1];
-					FA_RGB_ordered[3 * LA_Indices[iRGBA] + 2] += FA_RGBA[4 * iRGBA + 2];
+					LA_RGBCounts_perPoint.Resize(mesh.GetPoints().GetCount());
+					for (long i = 0, i_max = LA_RGBCounts_perPoint.GetCount(); i < i_max; i++)
+						LA_RGBCounts_perPoint[i] = 0;
+
+					// reorder sample property to vertices (average)
+					for (long iRGBA = 0, iRGBA_max = FA_RGBA_perSample.GetCount() / 4; iRGBA < iRGBA_max; iRGBA++) {
+
+						LA_RGBCounts_perPoint[LA_Indices[iRGBA]] += 1;
+						FA_RGB_perPoint[3 * LA_Indices[iRGBA] + 0] += FA_RGBA_perSample[4 * iRGBA + 0];
+						FA_RGB_perPoint[3 * LA_Indices[iRGBA] + 1] += FA_RGBA_perSample[4 * iRGBA + 1];
+						FA_RGB_perPoint[3 * LA_Indices[iRGBA] + 2] += FA_RGBA_perSample[4 * iRGBA + 2];
+					}
+
+					i_max = FA_RGB_perPoint.GetCount() / 3;
 				}
 
 				string strLine = "#MRGB ";
 				int nColors = 0;
-				for (int i = 0, i_max = FA_RGB_ordered.GetCount() / 3; i < i_max; i++) {
-					strLine += "ff";
-					int r = (int)(255.0 * (FA_RGB_ordered[3 * i] / LA_RGBCounts_ordered[i]));
-					strLine += hex[(r >> 4) & 0xf];
-					strLine += hex[r & 0xf];
-					int g = (int)(255.0 * (FA_RGB_ordered[3 * i + 1] / LA_RGBCounts_ordered[i]));
-					strLine += hex[(g >> 4) & 0xf];
-					strLine += hex[g & 0xf];
-					int b = (int)(255.0 * (FA_RGB_ordered[3 * i + 2] / LA_RGBCounts_ordered[i]));
-					strLine += hex[(b >> 4) & 0xf];
-					strLine += hex[b & 0xf];
+				for (int i = 0; i < i_max; i++) {
+
+					if (bMaskValid) {
+						int m = (int)(255.0 * (1.0 - FA_Mask[i]));
+						strLine += hex[(m >> 4) & 0xf];
+						strLine += hex[m & 0xf];
+					}
+					else
+						strLine += "ff";
+
+					if (bRGBValid) {
+						int r = (int)(255.0 * (FA_RGB_perPoint[3 * i] / LA_RGBCounts_perPoint[i]));
+						strLine += hex[(r >> 4) & 0xf];
+						strLine += hex[r & 0xf];
+						int g = (int)(255.0 * (FA_RGB_perPoint[3 * i + 1] / LA_RGBCounts_perPoint[i]));
+						strLine += hex[(g >> 4) & 0xf];
+						strLine += hex[g & 0xf];
+						int b = (int)(255.0 * (FA_RGB_perPoint[3 * i + 2] / LA_RGBCounts_perPoint[i]));
+						strLine += hex[(b >> 4) & 0xf];
+						strLine += hex[b & 0xf];
+					}
+					else
+						strLine += "ffffff";
+
 					if (nColors++ == 63) {
 						Output(m_pFile, strLine + "\r\n");
 						strLine = "#MRGB ";

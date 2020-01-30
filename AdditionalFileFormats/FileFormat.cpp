@@ -41,3 +41,41 @@ CRef CFileFormat::getVertexColorProperty(X3DObject xobj)
 
 	return foundPropertyRef;
 }
+
+CRef CFileFormat::getMaskProperty(X3DObject xobj)
+{
+	Application app;
+
+	CRef foundPropertyRef;
+
+	CString wtName = "Mask";
+	CRefArray vertexClusters;
+	Primitive prim = xobj.GetActivePrimitive();
+	PolygonMesh mesh = prim.GetGeometry();
+
+	// iterate sample clusters
+	mesh.GetClusters().Filter(siVertexCluster, CStringArray(), "", vertexClusters);
+	for (long iCluster = 0, iCluster_max = vertexClusters.GetCount(); iCluster < iCluster_max; iCluster++) {
+
+		Cluster vertexCluster(vertexClusters[iCluster]);
+		CRefArray wmProperties;
+		vertexCluster.GetProperties().Filter(siWgtMapType, CStringArray(), "", wmProperties);
+
+		// iterate color at vertex properties of clusters
+		for (long iProperty = 0, iProperty_max = wmProperties.GetCount(); iProperty < iProperty_max; iProperty++) {
+
+			CRef& propertyRef = wmProperties.GetItem(iProperty);
+			ClusterProperty property(propertyRef);
+
+			if (!foundPropertyRef.IsValid())
+				foundPropertyRef = propertyRef;
+
+			if (wtName == property.GetName())
+				return propertyRef;
+		}
+	}
+
+	return foundPropertyRef;
+}
+
+
