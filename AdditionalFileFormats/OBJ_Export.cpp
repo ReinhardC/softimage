@@ -28,8 +28,8 @@ CStatus COBJ::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 	m_progress.PutVisible(true);
 	m_progress.PutMaximum(3 * inObjects.GetCount());
 
-	for (long iObject = 0, iObject_max = inObjects.GetCount(); iObject < iObject_max; iObject++) {
-
+	for (long iObject = 0, iObject_max = inObjects.GetCount(); iObject < iObject_max; iObject++) 
+	{
 		X3DObject xobj(inObjects[iObject]);
 		if (!xobj.IsValid()) {
 			fails++;

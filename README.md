@@ -44,6 +44,7 @@ debug instructions:
 
 release history:
 -------------------------
+* Version 4.5 - keep original point order for 1 mesh
 * Version 4.0 - mesh replace feature for stl/obj (select mesh before import)
 * Version 3.0 - bugfixes + added material support for obj 
 * Version 2.3 - some speed improvements reading obj
