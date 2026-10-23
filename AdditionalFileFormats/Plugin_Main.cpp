@@ -17,7 +17,7 @@ XSIPLUGINCALLBACK CStatus XSILoadPlugin(PluginRegistrar& in_reg)
 {
 	in_reg.PutAuthor(L"Claus");
 	in_reg.PutName(L"Additional File Formats Plug-in");
-	in_reg.PutVersion(4, 6); // keep in sync with the release history in README.md
+	in_reg.PutVersion(4, 7); // keep in sync with the release history in README.md
 	
 	in_reg.RegisterCommand(L"ImportPLY");
 	in_reg.RegisterCommand(L"ImportSTL");

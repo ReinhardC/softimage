@@ -16,7 +16,7 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(sys._getframe().f_code.co
 SOURCE = os.path.join(REPO, 'Workgroup', 'Addons', 'AdditionalFileFormats')
 FILES = (r'Application\Plugins\AdditionalFileFormats.64.dll', r'Application\Plugins\AdditionalFileFormats.js')
 OUT = os.path.join(REPO, 'release', 'AdditionalFileFormats.xsiaddon')
-METADATA = (('Title', 'Additional File Formats 4.6'), ('AuthorName', 'ReinhardC'),
+METADATA = (('Title', 'Additional File Formats 4.7'), ('AuthorName', 'ReinhardC'),
             ('URL', 'https://github.com/ReinhardC/softimage'),
             ('Summary', 'OBJ, STL and PLY import/export for Softimage (ZBrush polypaint and mask, MTL materials, mesh replace)'))
 

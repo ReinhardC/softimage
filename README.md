@@ -42,7 +42,7 @@ uninstallation instructions:
 * delete the custom preference preset file "C:\Users\\[your_username]\Autodesk\Softimage_2015_R2-SP2\Data\Preferences\File Format Options.Preset" 
 
 the preferences (File > Import/Export > File Format Options) hold the default and last used folders, the export options and the OBJ import options.
-When upgrading from a version before 4.6 delete the preset file named above once, so that the new options get their defaults.
+When upgrading from a version before 4.7 delete the preset file named above once, so that the new options get their defaults.
 
 build instructions:
 -------------------------
@@ -63,6 +63,7 @@ debug instructions:
 
 release history:
 -------------------------
+* Version 4.7 - faster text import/export: OBJ import about 1.5x, OBJ export 3x, ASCII STL export 9x and ASCII STL import 2x faster (measured on a 500k vertex mesh); also: MTL definitions are no longer evaluated as script code, auto scale preference, one OBJ file per object option, Arnold roughness/Ns conversion, replace mode refuses files with several objects
 * Version 4.6 - large bugfix round:
   * OBJ import: `v//vn` faces, negative indices, tabs, `#comments` without a space and short lines are read correctly; material clusters follow `usemtl` across groups; objects are named after their group and created in file order; MTL materials are applied (never worked before) and texture options such as `-s` are skipped; point positions stay double; cancelling no longer crashes
   * OBJ export: `%` in names no longer corrupts the file, mask and color flags work separately, one file per object option
