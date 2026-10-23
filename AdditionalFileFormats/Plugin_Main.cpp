@@ -42,8 +42,9 @@ XSIPLUGINCALLBACK CStatus ImportSTL_Init(CRef& in_ctxt)
 	ArgumentArray args = cmd.GetArguments();
 	args.AddWithHandler(L"Objects", siArgHandlerCollection, L"");
 	args.Add(L"FileName");
+	args.Add(L"AutoScale", true);
 
-	cmd.PutDescription(L"ImportSTL([col]ObjectToReplace, [str]FolderAndFilename) - an empty collection means the current selection; deselect all to create a new object");
+	cmd.PutDescription(L"ImportSTL([col]ObjectToReplace, [str]FolderAndFilename, [bool]AutoScale) - an empty collection means the current selection; deselect all to create a new object");
 
 	return CStatus::OK;
 }
@@ -56,6 +57,7 @@ XSIPLUGINCALLBACK CStatus ImportSTL_Execute(XSI::CRef& in_ctxt)
 	ArgumentArray args = cmd.GetArguments();
 	CRefArray selectedObjects = (CRefArray)args.GetItem(0).GetValue();
 	CString strFolderAndFileName(args.GetItem(1).GetValue());
+	bool bAutoScale(args.GetItem(2).GetValue());
 
 	if (strFolderAndFileName.IsEmpty()) {
 		app.LogMessage(L"No Filename Specified in Arguments!");
@@ -63,7 +65,7 @@ XSIPLUGINCALLBACK CStatus ImportSTL_Execute(XSI::CRef& in_ctxt)
 	}
 
 	CSTL stl;
-	return stl.Execute_Import(selectedObjects, strFolderAndFileName.GetAsciiString());
+	return stl.Execute_Import(selectedObjects, strFolderAndFileName.GetAsciiString(), bAutoScale);
 }
 
 XSIPLUGINCALLBACK CStatus ExportSTL_Init(CRef& in_ctxt)
@@ -161,8 +163,9 @@ XSIPLUGINCALLBACK CStatus ImportOBJ_Init(CRef& in_ctxt)
 	args.Add(L"OBJ_ImportPolypaint", true);
 	args.Add(L"OBJ_CreateObjectsTag", "g");
 	args.Add(L"OBJ_CreateClustersTag", "usemtl");
-	
-	cmd.PutDescription(L"ImportOBJ([col]ObjectToReplace, [str]FolderAndFilename, [bool]ImportUVs, [bool]ImportUserNormals, [bool]ImportZBrushMask, [bool]ImportZBrushPolypaint, [str]CreateObjectsTag, [str]CreateClustersTag) - an empty collection means the current selection; deselect all to create new objects");
+	args.Add(L"AutoScale", true);
+
+	cmd.PutDescription(L"ImportOBJ([col]ObjectToReplace, [str]FolderAndFilename, [bool]ImportUVs, [bool]ImportUserNormals, [bool]ImportZBrushMask, [bool]ImportZBrushPolypaint, [str]CreateObjectsTag, [str]CreateClustersTag, [bool]AutoScale) - an empty collection means the current selection; deselect all to create new objects");
 
 	return CStatus::OK;
 }
@@ -183,6 +186,7 @@ XSIPLUGINCALLBACK CStatus ImportOBJ_Execute(XSI::CRef& in_ctxt)
 	obj.Prefs.OBJ_ImportPolypaint = args.GetItem(5).GetValue();
 	obj.Prefs.OBJ_CreateObjectsTag = args.GetItem(6).GetValue();
 	obj.Prefs.OBJ_CreateClustersTag = args.GetItem(7).GetValue();
+	obj.Prefs.OBJ_AutoScale = args.GetItem(8).GetValue();
 
 	if (strFolderAndFileName.IsEmpty()) {
 		app.LogMessage(L"No Filename Specified in Arguments");
@@ -202,8 +206,9 @@ XSIPLUGINCALLBACK CStatus ImportPLY_Init(CRef& in_ctxt)
 	args.Add(L"FileName");
 	args.Add(L"ImportUVs", true);
 	args.Add(L"ImportVertexColors", true);
+	args.Add(L"AutoScale", true);
 
-	cmd.PutDescription(L"ImportPLY([str]FolderAndFilename, [bool]ImportUVs, [bool]ImportVertexColors)");
+	cmd.PutDescription(L"ImportPLY([str]FolderAndFilename, [bool]ImportUVs, [bool]ImportVertexColors, [bool]AutoScale)");
 
 	return CStatus::OK;
 }
@@ -218,6 +223,7 @@ XSIPLUGINCALLBACK CStatus ImportPLY_Execute(XSI::CRef& in_ctxt)
 	CString strFolderAndFileName(args.GetItem(0).GetValue());
 	bool bImportUVs(args.GetItem(1).GetValue());
 	bool bImportVertexColors(args.GetItem(2).GetValue());
+	bool bAutoScale(args.GetItem(3).GetValue());
 
 	if (strFolderAndFileName.IsEmpty()) {
 		app.LogMessage(L"No Filename Specified in Arguments");
@@ -225,5 +231,5 @@ XSIPLUGINCALLBACK CStatus ImportPLY_Execute(XSI::CRef& in_ctxt)
 	}
 
 	CPLY ply;
-	return ply.Execute_Import(strFolderAndFileName.GetAsciiString(), bImportUVs, bImportVertexColors);
+	return ply.Execute_Import(strFolderAndFileName.GetAsciiString(), bImportUVs, bImportVertexColors, bAutoScale);
 }

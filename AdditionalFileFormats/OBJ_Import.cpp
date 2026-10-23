@@ -19,6 +19,38 @@ static bool isNumberToken(const char* token)
 	return end != token && *end == '\0';
 }
 
+// true for [A-Za-z_][A-Za-z0-9_]*: the only material keys that are passed on to the script side
+static bool isIdentifier(const char* s)
+{
+	if (!(isalpha((unsigned char)*s) || *s == '_'))
+		return false;
+	for (const char* p = s + 1; *p; p++)
+		if (!(isalnum((unsigned char)*p) || *p == '_'))
+			return false;
+	return true;
+}
+
+// escapes a value so that it is safe inside a double quoted JScript string literal
+static string escapeForJsString(const string& s)
+{
+	string out;
+	out.reserve(s.size() + 8);
+	for (size_t i = 0; i < s.size(); i++) {
+		unsigned char c = (unsigned char)s[i];
+		switch (c) {
+		case '\\': out += "\\\\"; break;
+		case '"':  out += "\\\""; break;
+		case '\n': out += "\\n"; break;
+		case '\r': out += "\\r"; break;
+		case '\t': out += "\\t"; break;
+		default:
+			if (c >= 0x20) // other control characters are dropped
+				out += (char)c;
+		}
+	}
+	return out;
+}
+
 CStatus COBJ::Execute_Import(CRefArray& selectedObjects, string initFilePathName)
 {
 	Application app;
@@ -64,6 +96,20 @@ CStatus COBJ::Execute_Import(CRefArray& selectedObjects, string initFilePathName
 
 	int nbMeshes = (int)meshesInFileOrder.size();
 
+	// replacing a mesh needs exactly one mesh in the file, otherwise all groups would be built into the same object
+	if (selectedObjects.GetCount() != 0) {
+		int nbMeshesWithPolygons = 0;
+		for (MeshData* pMesh : meshesInFileOrder)
+			if (!pMesh->PolygonPointCounts.empty())
+				nbMeshesWithPolygons++;
+		if (nbMeshesWithPolygons > 1) {
+			app.LogMessage("The file contains " + CString(nbMeshesWithPolygons) + " objects but replacing a mesh needs exactly one. Set 'Create an Object' to 'Create a Single Object', or deselect all to create new objects.", siErrorMsg);
+			for (auto p : mesh_from_name) delete(p.second);
+			m_progress.PutVisible(false);
+			return CStatus::Fail;
+		}
+	}
+
 	int ix = 1;
 	for (MeshData* pCurrentMesh : meshesInFileOrder) {
 
@@ -85,7 +131,8 @@ CStatus COBJ::Execute_Import(CRefArray& selectedObjects, string initFilePathName
 		else
 			root.AddPrimitive(L"EmptyPolygonMesh", CString(pCurrentMesh->name.c_str()), xobj);
 
-		xobj.PutLocalScaling(vAutoScaling); // after creation: on an empty X3DObject this was a no-op
+		if (Prefs.OBJ_AutoScale)
+			xobj.PutLocalScaling(vAutoScaling); // after creation: on an empty X3DObject this was a no-op
 
 		Primitive prim = xobj.GetActivePrimitive();
 
@@ -600,59 +647,43 @@ CStatus COBJ::Import(string filePathNam,
 		}
 		else /* material tags like Ka, Kd, ... */ {
 			if (currentMatName != "") {
-				if (currentMatTagName != "")
-					material_map[currentMatName].append(",\n");
-
-				currentMatTagName = string(firstToken);
-
-				material_map[currentMatName].append("\t");
-				material_map[currentMatName].append(firstToken);
-				material_map[currentMatName].append(": ");
-
-				if (!strncmp(firstToken, "map", 3) || STR_EQUAL(firstToken, "bump") || STR_EQUAL(firstToken, "disp") || STR_EQUAL(firstToken, "decal") || STR_EQUAL(firstToken, "refl"))
-				{
-					// skip texture options such as "-s 1 1 1", "-bm 0.5" or "-clamp on": what remains is the file name
-					size_t i = 1;
-					while (i < nbTokens && tokens[i][0] == '-' && tokens[i][1] != '\0' && !isdigit((unsigned char)tokens[i][1])) {
-						const char* option = tokens[i++];
-						if (STR_EQUAL(option, "-o") || STR_EQUAL(option, "-s") || STR_EQUAL(option, "-t") || STR_EQUAL(option, "-mm")) {
-							while (i < nbTokens && isNumberToken(tokens[i])) // 1 to 3 values
-								i++;
-						}
-						else if (i < nbTokens) // every other option takes exactly one value
-							i++;
-					}
-
-					material_map[currentMatName].append("\"");
-					while (i < nbTokens) { // recombine tokens with spaces
-						material_map[currentMatName] += tokens[i++];
-						if (i < nbTokens)
-							material_map[currentMatName] += " ";
-					}
-					material_map[currentMatName].append("\"");
-				}
-				else if (nbTokens == 2)
-				{
-					material_map[currentMatName].append(secondToken);
-				}
-				else if (nbTokens == 4) {
-					material_map[currentMatName].append("[");
-					material_map[currentMatName].append(tokens[1]);
-					material_map[currentMatName].append(", ");
-					material_map[currentMatName].append(tokens[2]);
-					material_map[currentMatName].append(", ");
-					material_map[currentMatName].append(tokens[3]);
-					material_map[currentMatName].append("]");
+				// Every value becomes an escaped string literal under a validated key, so a crafted .mtl cannot
+				// run code when the definition is evaluated on the script side. Numeric values are converted
+				// back by normalizeMaterialDefinition() in AdditionalFileFormats.js.
+				if (!isIdentifier(firstToken)) {
+					app.LogMessage("Material token (" + CString(firstToken) + ") ignored: not a valid name.", siVerboseMsg);
 				}
 				else {
-					app.LogMessage("Unhandled material token (" + CString(firstToken) + ") processed as string.", siVerboseMsg);
-					material_map[currentMatName].append("\"");
-					int i = 1;
-					while (i < nbTokens) { // recombine tokens with spaces
-						material_map[currentMatName] += tokens[i++];
-						if (i < nbTokens)
-							material_map[currentMatName] += " ";
+					size_t i = 1;
+					if (!strncmp(firstToken, "map", 3) || STR_EQUAL(firstToken, "bump") || STR_EQUAL(firstToken, "disp") || STR_EQUAL(firstToken, "decal") || STR_EQUAL(firstToken, "refl"))
+					{
+						// skip texture options such as "-s 1 1 1", "-bm 0.5" or "-clamp on": what remains is the file name
+						while (i < nbTokens && tokens[i][0] == '-' && tokens[i][1] != '\0' && !isdigit((unsigned char)tokens[i][1])) {
+							const char* option = tokens[i++];
+							if (STR_EQUAL(option, "-o") || STR_EQUAL(option, "-s") || STR_EQUAL(option, "-t") || STR_EQUAL(option, "-mm")) {
+								while (i < nbTokens && isNumberToken(tokens[i])) // 1 to 3 values
+									i++;
+							}
+							else if (i < nbTokens) // every other option takes exactly one value
+								i++;
+						}
 					}
+
+					string value;
+					while (i < nbTokens) { // recombine tokens with spaces
+						value += tokens[i++];
+						if (i < nbTokens)
+							value += " ";
+					}
+
+					if (currentMatTagName != "")
+						material_map[currentMatName].append(",\n");
+					currentMatTagName = string(firstToken);
+
+					material_map[currentMatName].append("\t\"");
+					material_map[currentMatName].append(firstToken);
+					material_map[currentMatName].append("\": \"");
+					material_map[currentMatName].append(escapeForJsString(value));
 					material_map[currentMatName].append("\"");
 				}
 			}

@@ -112,6 +112,7 @@ public:
 public:
 	string getFormatName() { return "OBJ"; };
 	CStatus Execute_Export(CRefArray& inObjects, string initFilePathName, bool bExportMask, bool bExportPolypaint, bool bSeparateFiles, bool bWriteMTLFile, bool bExportLocalCoords);
+	CStatus ExportToFile(CRefArray& inObjects, string filePathName, bool bExportMask, bool bExportPolypaint, bool bWriteMTLFile, bool bExportLocalCoords);
 	CStatus Execute_Import(CRefArray& inObjects, string filePathNam);
 	CStatus Import(string filePathNam, 
 		unordered_map<string, MeshData*>& mesh_map, 

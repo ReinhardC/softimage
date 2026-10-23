@@ -329,7 +329,7 @@ CStatus CPLY::readBody(const vector<elementinfo>& header, PlyData& data)
 	return CStatus::OK;
 }
 
-CStatus CPLY::Execute_Import(string initFilePathName, bool bImportUVs, bool bImportVertexColors)
+CStatus CPLY::Execute_Import(string initFilePathName, bool bImportUVs, bool bImportVertexColors, bool bAutoScale)
 {
 	CFileFormat::initStrings(initFilePathName);
 
@@ -385,7 +385,8 @@ CStatus CPLY::Execute_Import(string initFilePathName, bool bImportUVs, bool bImp
 	if (lfExtentX >= 150)
 		vAutoScaling.Set(0.01, 0.01, 0.01);
 
-	xobj.PutLocalScaling(vAutoScaling);
+	if (bAutoScale)
+		xobj.PutLocalScaling(vAutoScaling);
 
 	CMeshBuilder meshBuilder = mesh.GetMeshBuilder();
 

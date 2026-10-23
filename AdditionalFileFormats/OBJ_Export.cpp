@@ -2,12 +2,51 @@
 
 CStatus COBJ::Execute_Export(CRefArray& inObjects, string initFilePathName, bool bExportMask, bool bExportVertexColors, bool bSeparateFiles, bool bWriteMTLFile, bool bExportLocalCoords)
 {
+	if (!bSeparateFiles)
+		return ExportToFile(inObjects, initFilePathName, bExportMask, bExportVertexColors, bWriteMTLFile, bExportLocalCoords);
+
+	// one file (and MTL) per object, named <folder>\<file name>_<object name>.obj
+	XSI::Application app;
+
+	initStrings(initFilePathName);
+	string folder = m_filePath, baseName = m_fileName;
+
+	CStatus result = CStatus::OK;
+	long nbSkipped = 0;
+	for (long iObject = 0, iObject_max = inObjects.GetCount(); iObject < iObject_max; iObject++) {
+		X3DObject xobj(inObjects[iObject]);
+		PolygonMesh mesh;
+		if (xobj.IsValid())
+			mesh = xobj.GetActivePrimitive().GetGeometry();
+		if (!mesh.IsValid()) {
+			nbSkipped++;
+			continue;
+		}
+
+		CRefArray single;
+		single.Add(xobj.GetRef());
+		string filePathName = folder + baseName + "_" + string(xobj.GetName().GetAsciiString()) + ".obj";
+		if (ExportToFile(single, filePathName, bExportMask, bExportVertexColors, bWriteMTLFile, bExportLocalCoords) != CStatus::OK)
+			result = CStatus::Fail;
+	}
+
+	if (nbSkipped != 0)
+		app.LogMessage("OBJ export: " + CString(nbSkipped) + " selected items were skipped (nulls or other non-mesh items).", siWarningMsg);
+
+	return result;
+}
+
+// writes all given objects into one OBJ file (plus a MTL file of the same name when asked for)
+CStatus COBJ::ExportToFile(CRefArray& inObjects, string initFilePathName, bool bExportMask, bool bExportVertexColors, bool bWriteMTLFile, bool bExportLocalCoords)
+{
 	XSI::Application app;
 
 	initStrings(initFilePathName);
 
-	if (bSeparateFiles)
-		app.LogMessage(L"ExportOBJ: ExportToSeparateFiles is not implemented, all objects are written to one file.", siWarningMsg);
+	// indices in an OBJ file are global, every object in the same file continues after the previous one
+	m_vertices_base_ix_group = 0;
+	m_uvs_base_ix_group = 0;
+	m_normals_base_ix_group = 0;
 
 	if ((m_pFile = fopen(m_filePathName.c_str(), "wb")) == NULL) {
 		app.LogMessage("Could not create '" + CString(m_filePathName.c_str()) + "'.", siErrorMsg);

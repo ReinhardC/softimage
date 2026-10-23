@@ -40,7 +40,7 @@ function ApplyShaderTree_arnoldrender(matName, matDefinition, objList, folder)
 		applyAImage(newSurface.transmission_color, folder + matDefinition.map_Kt, newMaterial);
 			
 	if(matDefinition.Ns)
-		newSurface.specular_roughness.Value = Math.max(0.0, Math.min(1.0, matDefinition.Ns));
+		newSurface.specular_roughness.Value = phongExponentToRoughness(matDefinition.Ns);
 	if(matDefinition.map_Ns) 
 		applyAImage(newSurface.specular_roughness, folder + matDefinition.map_Ns, newMaterial);	
 	
@@ -84,7 +84,7 @@ function ParseShaderTree_arnoldrender(instance, material, folder)
 			else if(shader.transmission_color.Sources.Count != 0 && shader.transmission_color.Sources.Item(0).Parent.ProgID == "Arnold.image.1.0")
 				map_Kt = "map_Kt "  + getAImageFileName(shader.transmission_color.Sources.Item(0).Parent).replace(folder, "") + "\n";
 		
-			Ns = "Ns " + shader.parameters('specular_roughness').Value + "\n";
+			Ns = "Ns " + roughnessToPhongExponent(shader.parameters('specular_roughness').Value) + "\n";
 			if(shader.parameters('specular_roughness').Sources.Count != 0 && shader.parameters('specular_roughness').Sources.Item(0).Parent.ProgID == "Softimage.txt2d-image-explicit.1.0")
 				map_Ns = "map_Ns " + getSIImageFileName(shader.parameters('specular_roughness').Sources.Item(0).Parent).replace(folder, "") + "\n";
 			else if(shader.parameters('specular_roughness').Sources.Count != 0 && shader.parameters('specular_roughness').Sources.Item(0).Parent.ProgID == "Arnold.image.1.0")
@@ -299,6 +299,32 @@ function ApplyShaderTree_Init( in_ctxt )
 	return true;
 }
 
+// The C++ importer passes every MTL value as a string (so nothing in a .mtl file can run as code).
+// Values that are plain numbers, e.g. "0.5" or "1 0 0", become a number or an array of numbers here;
+// texture file names (map_*, bump, disp, decal, refl) always stay strings.
+function normalizeMaterialDefinition( def )
+{
+	for (var key in def) {
+		var value = def[key];
+		if (typeof value != "string")
+			continue;
+		if (key.indexOf("map") == 0 || key == "bump" || key == "disp" || key == "decal" || key == "refl")
+			continue;
+
+		var parts = value.split(" ");
+		var numbers = [];
+		var allNumeric = parts.length > 0;
+		for (var i = 0; i < parts.length && allNumeric; i++) {
+			if (/^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$/.test(parts[i]))
+				numbers.push(parseFloat(parts[i]));
+			else
+				allNumeric = false;
+		}
+		if (allNumeric)
+			def[key] = (numbers.length == 1) ? numbers[0] : numbers;
+	}
+}
+
 // this is used as a callback, called from inside cpp command ImportOBJ
 function ApplyShaderTree_Execute( matName, matDefinitionAsJson, objList, folder )
 {
@@ -313,6 +339,8 @@ function ApplyShaderTree_Execute( matName, matDefinitionAsJson, objList, folder 
 		LogMessage("Error in Material Definition \"" + matDefinitionAsJson + "\"", siWarningMsg);
 		return;
 	}
+
+	normalizeMaterialDefinition(material);
 
 	if (eval("typeof " + strCallback) != "function") {
 		LogMessage("AdditionalFileFormats.js: Callback '" + strCallback + "()' not implemented for Current Pass Renderer - No Materials will be created.", siWarningMsg);
@@ -355,6 +383,8 @@ function FileFormatOptions_Define( in_ctxt )
 	oCustomProperty.AddParameter3("OBJ_ImportUVs", siBool, 1, 0, 1, false );
 	oCustomProperty.AddParameter3("OBJ_CreateObjectsTag", siInt4, 0, 0, 3, false );
 	oCustomProperty.AddParameter3("OBJ_CreateClustersTag", siInt4, 2, 0, 3, false );
+	oCustomProperty.AddParameter3("OBJ_AutoScale", siBool, 1, 0, 1, false );
+	oCustomProperty.AddParameter3("OBJ_SeparateFiles", siBool, 0, 0, 1, false );
 	  
 	//STL
 	oCustomProperty.AddParameter3("STL_DefaultPath", siString );		
@@ -362,11 +392,13 @@ function FileFormatOptions_Define( in_ctxt )
 	oCustomProperty.AddParameter3("STL_rememberLastUsedPath", siBool, 1, null,  null, false );
 	oCustomProperty.AddParameter3("STL_Format", siInt4, 0, 0, 1, false );
 	oCustomProperty.AddParameter3("STL_LocalCoords", siBool, 0, 0, 1, false );
+	oCustomProperty.AddParameter3("STL_AutoScale", siBool, 1, 0, 1, false );
 
 	//PLY
 	oCustomProperty.AddParameter3("PLY_DefaultPath", siString );
 	oCustomProperty.AddParameter3("PLY_LastUsedPath", siString );
 	oCustomProperty.AddParameter3("PLY_rememberLastUsedPath", siBool, 1, null,  null, false );
+	oCustomProperty.AddParameter3("PLY_AutoScale", siBool, 1, 0, 1, false );
 
 	return true;
 }
@@ -390,6 +422,7 @@ function FileFormatOptions_DefineLayout( in_ctxt )
 	
 		oItem = oLayout.AddItem( "OBJ_WriteMTL", "Write MTL File");
 		oItem = oLayout.AddItem( "OBJ_LocalCoords", "Use Local Coordinates");
+		oItem = oLayout.AddItem( "OBJ_SeparateFiles", "One File per Object (<name>_<object>.obj)");
 		
 	oLayout.EndGroup();
 	
@@ -401,6 +434,7 @@ function FileFormatOptions_DefineLayout( in_ctxt )
 		aComboItems = Array("for each G tag", 0, "for each O tag", 1, "for each USEMTL tag (default)", 2, "Do not create Clusters", 3)
 		oItem = oLayout.AddEnumControl("OBJ_CreateClustersTag", aComboItems, "Create a Cluster")		
 		
+		oItem = oLayout.AddItem( "OBJ_AutoScale", "Auto Scale Large Meshes (0.1 / 0.01 when wider than 55 / 150 units)")
 		oItem = oLayout.AddItem( "OBJ_ImportPolypaint", "Import ZBrush Polypaint")
 		oItem = oLayout.AddItem( "OBJ_ImportMask", "Import ZBrush Mask")
 		oItem = oLayout.AddItem( "OBJ_ImportUserNormals", "Import User Normals")
@@ -420,6 +454,7 @@ function FileFormatOptions_DefineLayout( in_ctxt )
 	oLayout.AddGroup ("Import");
 
 		oLayout.AddStaticText( "Import creates a new polygon mesh, or replaces the mesh of the selected object." );
+		oItem = oLayout.AddItem( "STL_AutoScale", "Auto Scale Large Meshes (0.1 / 0.01 when wider than 55 / 150 units)");
 
 	oLayout.EndGroup();
 
@@ -445,6 +480,7 @@ function FileFormatOptions_DefineLayout( in_ctxt )
 	oLayout.AddGroup ("Import");
 
 		oLayout.AddStaticText( "Import creates a new polygon mesh with vertex colors and UVs when the file has them. There is no PLY export." );
+		oItem = oLayout.AddItem( "PLY_AutoScale", "Auto Scale Large Meshes (0.1 / 0.01 when wider than 55 / 150 units)");
 
 	oLayout.EndGroup();
 
@@ -490,7 +526,7 @@ function ShowImportSTLFileBrowser( in_ctxt )
 			else if ( btn == siMsgCancel)
 				return;
 		}
-		ImportSTL (Selection, oFileBrowser.FilePathName);
+		ImportSTL (Selection, oFileBrowser.FilePathName, GetValue("preferences.File Format Options.STL_AutoScale"));
 		saveInitialDir ("STL", oFileBrowser.FilePath);
 	}
 
@@ -507,8 +543,9 @@ function ShowExportOBJFileBrowser( in_ctxt )
 	oFileBrowser.ShowSave();
 	bUseLocalCoords = GetValue("preferences.File Format Options.OBJ_LocalCoords");
 	bWriteMTL = GetValue("preferences.File Format Options.OBJ_WriteMTL");
+	var bSeparateFiles = GetValue("preferences.File Format Options.OBJ_SeparateFiles");
 	if (oFileBrowser.FilePathName != "") {
-		ExportOBJ (Selection, oFileBrowser.FilePathName, null, null , bWriteMTL, bUseLocalCoords);
+		ExportOBJ (Selection, oFileBrowser.FilePathName, null, null, bSeparateFiles, bWriteMTL, bUseLocalCoords);
 		saveInitialDir ("OBJ", oFileBrowser.FilePath);
 	}
 
@@ -568,7 +605,8 @@ function ShowImportOBJFileBrowser( in_ctxt )
 			Application.Preferences.GetPreferenceValue("File Format Options.OBJ_ImportUserNormals"), 
 			Application.Preferences.GetPreferenceValue("File Format Options.OBJ_ImportMask"), 
 			Application.Preferences.GetPreferenceValue("File Format Options.OBJ_ImportPolypaint"), 
-			createObjectsTag, createClustersTag);
+			createObjectsTag, createClustersTag,
+			Application.Preferences.GetPreferenceValue("File Format Options.OBJ_AutoScale"));
 	
 		saveInitialDir ("OBJ", oFileBrowser.FilePath);
 	}
@@ -585,7 +623,7 @@ function ShowImportPLYFileBrowser( in_ctxt )
 	oFileBrowser.Filter = "PLY Format (*.ply)|*.ply||"
 	oFileBrowser.ShowOpen() 
 	if (oFileBrowser.FilePathName != "") {
-		ImportPLY (oFileBrowser.FilePathName);
+		ImportPLY (oFileBrowser.FilePathName, true, true, GetValue("preferences.File Format Options.PLY_AutoScale"));
 		saveInitialDir ("PLY", oFileBrowser.FilePath);
 	}
 
@@ -648,6 +686,20 @@ function round6(x)
 	return Math.round(x*1000000)/1000000;
 }
 
+// MTL "Ns" is a Phong specular exponent (0..1000), Arnold uses roughness (0..1).
+// Same mapping as Blender's OBJ importer/exporter so files round-trip between the two.
+function phongExponentToRoughness(ns)
+{
+	var n = Math.max(0.0, Math.min(1000.0, Number(ns)));
+	return 1.0 - Math.sqrt(n / 1000.0);
+}
+
+function roughnessToPhongExponent(roughness)
+{
+	var x = 1.0 - Math.max(0.0, Math.min(1.0, Number(roughness)));
+	return round6(x * x * 1000.0);
+}
+
 function getInitialDir( fileTypeEnding )
 {
 	defaultPath = GetValue("preferences.File Format Options." + fileTypeEnding + "_DefaultPath")
@@ -674,33 +726,44 @@ function saveInitialDir( fileTypeEnding, folder )
 		SetValue ("preferences.File Format Options." + fileTypeEnding + "_LastUsedPath", folder);	
 }
 
+// a texture that cannot be loaded (missing file, odd name) only costs that texture, not the whole material
 function applySIImage(colorParameter, texturePath, material)
 {
-	var newImageNode = CreateShaderFromProgID("Softimage.txt2d-image-explicit.1.0", material, "Image");
-	SetInstanceDataValue(null, newImageNode+".tspace_id", "Texture_Projection");
-	
-	var newClip = SICreateImageClip2(texturePath)(0);	
-	newClip.oglmaxsize.Value = 4096;
-	
-	SIConnectShaderToCnxPoint(newClip, newImageNode+".tex", false);
-	SIConnectShaderToCnxPoint(newImageNode+".out", colorParameter, false);	
-	
-	DisconnectAndDeleteOrUnnestShaders("Clips.noIcon_pic", material);
+	try {
+		var newImageNode = CreateShaderFromProgID("Softimage.txt2d-image-explicit.1.0", material, "Image");
+		SetInstanceDataValue(null, newImageNode+".tspace_id", "Texture_Projection");
+
+		var newClip = SICreateImageClip2(texturePath)(0);
+		newClip.oglmaxsize.Value = 4096;
+
+		SIConnectShaderToCnxPoint(newClip, newImageNode+".tex", false);
+		SIConnectShaderToCnxPoint(newImageNode+".out", colorParameter, false);
+
+		DisconnectAndDeleteOrUnnestShaders("Clips.noIcon_pic", material);
+	}
+	catch(e) {
+		LogMessage("AdditionalFileFormats.js: texture '" + texturePath + "' could not be applied to " + colorParameter + " (" + e.description + ")", siWarningMsg);
+	}
 }
 
 function applyAImage(colorParameter, texturePath, material)
 {
-	var newImageNode = CreateShaderFromProgID("Arnold.image.1.0", material, "Image");
-	newImageNode.filename = texturePath;	
-	
-	var newClip = SICreateImageClip2(texturePath)(0);
-	newClip.oglmaxsize.Value = 4096;	
-	
-	material.TextureSel.Value = 3;
-	material.ImageClipName.Value = String(newClip);
-	SetInstanceDataValue(null, material+".UV", "Texture_Projection");
-	
-	SIConnectShaderToCnxPoint(newImageNode+".out", colorParameter, false);	
+	try {
+		var newImageNode = CreateShaderFromProgID("Arnold.image.1.0", material, "Image");
+		newImageNode.filename = texturePath;
+
+		var newClip = SICreateImageClip2(texturePath)(0);
+		newClip.oglmaxsize.Value = 4096;
+
+		material.TextureSel.Value = 3;
+		material.ImageClipName.Value = String(newClip);
+		SetInstanceDataValue(null, material+".UV", "Texture_Projection");
+
+		SIConnectShaderToCnxPoint(newImageNode+".out", colorParameter, false);
+	}
+	catch(e) {
+		LogMessage("AdditionalFileFormats.js: texture '" + texturePath + "' could not be applied to " + colorParameter + " (" + e.description + ")", siWarningMsg);
+	}
 }
 
 function getSIImageFileName(siImageNode)

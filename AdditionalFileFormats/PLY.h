@@ -79,5 +79,5 @@ class CPLY : public CFileFormat {
 public:
 	string getFormatName() { return "PLY"; }
 
-	CStatus Execute_Import(string initFilePathName, bool bImportUVs, bool bImportVertexColors);
+	CStatus Execute_Import(string initFilePathName, bool bImportUVs, bool bImportVertexColors, bool bAutoScale);
 };

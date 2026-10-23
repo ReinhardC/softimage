@@ -1,6 +1,6 @@
 #include "stl.h"
 
-CStatus CSTL::Execute_Import(CRefArray& selectedObjects, string initFilePathName)
+CStatus CSTL::Execute_Import(CRefArray& selectedObjects, string initFilePathName, bool bAutoScale)
 {
 	initStrings(initFilePathName);
 
@@ -127,7 +127,8 @@ CStatus CSTL::Execute_Import(CRefArray& selectedObjects, string initFilePathName
 	else
 		root.AddPrimitive(L"EmptyPolygonMesh", CString(m_fileName.c_str()), xobj);
 
-	xobj.PutLocalScaling(vAutoScaling); // after creation: on an empty X3DObject this was a no-op
+	if (bAutoScale)
+		xobj.PutLocalScaling(vAutoScaling); // after creation: on an empty X3DObject this was a no-op
 
 	Primitive prim = xobj.GetActivePrimitive();
 	PolygonMesh mesh = prim.GetGeometry();
