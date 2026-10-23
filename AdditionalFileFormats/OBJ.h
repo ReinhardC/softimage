@@ -59,6 +59,7 @@ public:
 	string name;
 
 	bool bIsDefaultMesh = true; // has not been initialized by an "o" tag yet
+	long fileOrder = 0; // order of first appearance in the file, objects are created in this order
 
 	vector<long> PolygonPointCounts;
 	vector<double> PointPositions;

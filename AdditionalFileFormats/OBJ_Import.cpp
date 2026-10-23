@@ -48,30 +48,38 @@ CStatus COBJ::Execute_Import(CRefArray& selectedObjects, string initFilePathName
 
 	Model root = app.GetActiveSceneRoot();
 
-	int nbMeshes = mesh_from_name.size();
+	// create the objects in the order their groups appear in the file (the map iterates in hash order)
+	vector<MeshData*> meshesInFileOrder;
+	for (auto p : mesh_from_name)
+		meshesInFileOrder.push_back(p.second);
+	sort(meshesInFileOrder.begin(), meshesInFileOrder.end(), [](MeshData* a, MeshData* b) { return a->fileOrder < b->fileOrder; });
+
+	int nbMeshes = (int)meshesInFileOrder.size();
 
 	int ix = 1;
-	for (auto p : mesh_from_name) {
-
-		MeshData* pCurrentMesh = p.second;
+	for (MeshData* pCurrentMesh : meshesInFileOrder) {
 
 		m_progress.PutCaption("Importing OBJ (Building Mesh " + CString(ix++) + " of " + CString(nbMeshes) + ")");
 
 		if (pCurrentMesh->PolygonPointCounts.size() == 0)
 			continue;
 
-		Primitive prim;
+		X3DObject xobj;
 		if (selectedObjects.GetCount() != 0) {
-			X3DObject xobj(selectedObjects[0]);
-			xobj.PutLocalScaling(vAutoScaling);
-			prim = xobj.GetActivePrimitive();
+			xobj = X3DObject(selectedObjects[0]);
+			PolygonMesh existingMesh = xobj.GetActivePrimitive().GetGeometry();
+			if (!existingMesh.IsValid()) {
+				app.LogMessage(L"The selected object is not a polygon mesh, nothing was imported.", siErrorMsg);
+				status = CStatus::Fail;
+				break;
+			}
 		}
-		else {
-			X3DObject xobj;
-			xobj.PutLocalScaling(vAutoScaling);
-			root.AddPrimitive(L"EmptyPolygonMesh", CString(m_fileName.c_str()), xobj);
-			prim = xobj.GetActivePrimitive();
-		}
+		else
+			root.AddPrimitive(L"EmptyPolygonMesh", CString(pCurrentMesh->name.c_str()), xobj);
+
+		xobj.PutLocalScaling(vAutoScaling); // after creation: on an empty X3DObject this was a no-op
+
+		Primitive prim = xobj.GetActivePrimitive();
 
 		PolygonMesh mesh = prim.GetGeometry();
 
@@ -119,7 +127,7 @@ CStatus COBJ::Execute_Import(CRefArray& selectedObjects, string initFilePathName
 				scene_refs_from_mat_name[mat_name].Add(cls);
 			}
 			else // don't create 100% coverage clusters, use object itself (TODO: add preferernce for this)
-				scene_refs_from_mat_name[mat_name].Add(prim.GetParent3DObject());
+				scene_refs_from_mat_name[mat_name].Add(xobj.GetRef()); // not prim.GetParent3DObject(): that yields an invalid ref here
 		}
 
 		CClusterPropertyBuilder cpBuilder = mesh.GetClusterPropertyBuilder();
@@ -153,13 +161,23 @@ CStatus COBJ::Execute_Import(CRefArray& selectedObjects, string initFilePathName
 		CRefArray& scene_refs = a.second;
 
 		if (json_from_mat_name.count(mat_name)) {
+			// the targets go as a comma separated name list: a CRefArray argument does not reach the
+			// script command as a usable collection, so SIAssignMaterial in the callback failed silently
+			CString targets;
+			for (long i = 0, i_max = scene_refs.GetCount(); i < i_max; i++) {
+				if (i > 0)
+					targets += L",";
+				targets += SIObject(scene_refs[i]).GetFullName();
+			}
+
 			CValue rVal;
-			CValueArray& args = CValueArray();
+			CValueArray args;
 			args.Add(CString(mat_name.c_str()));
 			args.Add(CString(json_from_mat_name[mat_name].c_str()));
-			args.Add(scene_refs);
+			args.Add(targets);
 			args.Add(CString(m_filePath.c_str()));
-			app.ExecuteCommand(L"ApplyShaderTree", args, rVal);
+			if (app.ExecuteCommand(L"ApplyShaderTree", args, rVal) != CStatus::OK)
+				app.LogMessage("Applying material '" + CString(mat_name.c_str()) + "' failed, see messages above.", siWarningMsg);
 		}
 	}
 
@@ -167,7 +185,7 @@ CStatus COBJ::Execute_Import(CRefArray& selectedObjects, string initFilePathName
 
 	m_progress.PutVisible(false);
 
-	return CStatus::OK;
+	return status;
 }
 
 // Parses an OBJ (or MTL, same syntax) file into mesh_map / material_map.
@@ -185,12 +203,12 @@ CStatus COBJ::Import(string filePathNam,
 		return CStatus::Fail;
 	}
 
-	fseek(m_pFile, 0L, SEEK_END);
-	long file_size_bytes = ftell(m_pFile);
+	_fseeki64(m_pFile, 0, SEEK_END);
+	long long file_size_bytes = _ftelli64(m_pFile); // 64 bit: files over 2 GB are common for scans
 	rewind(m_pFile);
 
 	m_progress.PutValue(0);
-	m_progress.PutMaximum(file_size_bytes / 10000);
+	m_progress.PutMaximum((long)(file_size_bytes / 10000));
 
 	const char* new_object_tag = Prefs.OBJ_CreateObjectsTag.GetAsciiString();
 	const char* new_cluster_tag = Prefs.OBJ_CreateClustersTag.GetAsciiString();
@@ -220,8 +238,9 @@ CStatus COBJ::Import(string filePathNam,
 
 	long current_action_id = 0; // inactve
 	long nbModeSwitches2 = 0, nbModeSwitches3 = 0, nbModeSwitches4 = 0, nbModeSwitches5 = 0, nbModeSwitches6 = 0;
-	int pos_in_file_bytes = 0, last_pos_in_file_bytes, actual_bytes_read;
+	long long pos_in_file_bytes = 0, last_pos_in_file_bytes, actual_bytes_read;
 	int line_in_file = 0;
+	long nextFileOrder = 0;
 
 	CStatus status = CStatus::OK;
 	bool bAbort = false;
@@ -231,7 +250,7 @@ CStatus COBJ::Import(string filePathNam,
 			break;
 
 		last_pos_in_file_bytes = pos_in_file_bytes;
-		pos_in_file_bytes = ftell(m_pFile);
+		pos_in_file_bytes = _ftelli64(m_pFile);
 		actual_bytes_read = pos_in_file_bytes - last_pos_in_file_bytes + 1;
 
 		// realloc if buffer is too small
@@ -242,7 +261,7 @@ CStatus COBJ::Import(string filePathNam,
 			if (!fgets(pbuf + max_line_length - increment_bytes - 1, increment_bytes + 1, m_pFile))
 				break;
 
-			pos_in_file_bytes = ftell(m_pFile);
+			pos_in_file_bytes = _ftelli64(m_pFile);
 			actual_bytes_read = pos_in_file_bytes - last_pos_in_file_bytes + 1;
 		}
 
@@ -271,8 +290,10 @@ CStatus COBJ::Import(string filePathNam,
 				pPreviousMesh = pCurrentMesh;
 			}
 
-			if (!mesh_map.size())
+			if (!mesh_map.size()) {
+				pCurrentMesh->fileOrder = nextFileOrder++;
 				mesh_map.insert({ pCurrentMesh->name, pCurrentMesh });
+			}
 
 			// index of the polygon about to be added (PolygonPointCounts grows at the end of this block)
 			if (pCurrentMatCluster)
@@ -371,7 +392,7 @@ CStatus COBJ::Import(string filePathNam,
 							pCurrentMesh->RGBA.push_back(RGB_inFile[3 * fileIx]);
 							pCurrentMesh->RGBA.push_back(RGB_inFile[3 * fileIx + 1]);
 							pCurrentMesh->RGBA.push_back(RGB_inFile[3 * fileIx + 2]);
-							pCurrentMesh->RGBA.push_back(255.0);
+							pCurrentMesh->RGBA.push_back(1.0f); // alpha, same 0..1 range as the colors
 						}
 						else {
 							app.LogMessage(L"A polygon in line " + CString(line_in_file + 1) + " inside " + CString(m_fileNameWithExt.c_str()) + L" is defined with missing polypaint color entries. Loading polypaint/mask is diabled for the rest of this import.", siErrorMsg);
@@ -400,10 +421,11 @@ CStatus COBJ::Import(string filePathNam,
 				break;
 			}
 
-			float x = (float)atof(secondToken);
+			// kept as double: float would lose precision for scans with large coordinates
+			double x = atof(secondToken);
 			PP_inFile.push_back(x);
-			PP_inFile.push_back((float)atof(tokens[2]));
-			PP_inFile.push_back((float)atof(tokens[3]));
+			PP_inFile.push_back(atof(tokens[2]));
+			PP_inFile.push_back(atof(tokens[3]));
 
 			if (x > lfMaxExtentX) // for auto scale
 				lfMaxExtentX = x;
@@ -491,6 +513,7 @@ CStatus COBJ::Import(string filePathNam,
 					else
 						pCurrentMesh = new MeshData(name);
 
+					pCurrentMesh->fileOrder = nextFileOrder++;
 					mesh_map.insert({ name, pCurrentMesh });
 					pCurrentMesh->bIsDefaultMesh = false;
 				}
@@ -537,8 +560,8 @@ CStatus COBJ::Import(string filePathNam,
 			currentMatName = name;
 			currentMatTagName = "";
 		}
-		else if (STR_EQUAL(firstToken, "#")) {
-			// ignore comments
+		else if (*firstToken == '#') {
+			// ignore comments, with or without a space after the '#'
 		}
 		else /* material tags like Ka, Kd, ... */ {
 			if (currentMatName != "") {
@@ -596,7 +619,7 @@ CStatus COBJ::Import(string filePathNam,
 		line_in_file++;
 		if (line_in_file % 1000 == 0) { // increment progress bar
 			m_progress.Increment(1);
-			m_progress.PutValue(pos_in_file_bytes / 10000);
+			m_progress.PutValue((long)(pos_in_file_bytes / 10000));
 			if (m_progress.IsCancelPressed()) {
 				status = CStatus::False;
 				break;

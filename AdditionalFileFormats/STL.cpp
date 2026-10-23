@@ -38,9 +38,9 @@ CStatus CSTL::Execute_Import(CRefArray& selectedObjects, string initFilePathName
 	CString idLine = buf;
 	fseek(m_pFile, 80L, SEEK_SET); // skip header
 	fread(&numTris1, sizeof(ULONG), 1, m_pFile);
-	fseek(m_pFile, 0L, SEEK_END);
-	long fileSize = ftell(m_pFile);
-	if (fileSize != 84 + 50 * numTris1 && idLine.FindString("solid") != UINT_MAX) {
+	_fseeki64(m_pFile, 0, SEEK_END);
+	long long fileSize = _ftelli64(m_pFile); // 64 bit: binary STL files can exceed 2 GB
+	if (fileSize != 84LL + 50LL * numTris1 && idLine.FindString("solid") != UINT_MAX) {
 		bBinary = false;
 		fseek(m_pFile, 0L, 0);
 	}
@@ -121,22 +121,15 @@ CStatus CSTL::Execute_Import(CRefArray& selectedObjects, string initFilePathName
 
 	m_progress.PutCaption("Building Mesh");
 
-	Primitive prim;
-	if (selectedObjects.GetCount() != 0) {
-		X3DObject xobj(selectedObjects[0]);
-		xobj.PutLocalScaling(vAutoScaling);
-		// get a mesh builder from the newly created geometry
-		prim = xobj.GetActivePrimitive();
-	}
-	else {
-		X3DObject xobj;
-		xobj.PutLocalScaling(vAutoScaling);
+	X3DObject xobj;
+	if (selectedObjects.GetCount() != 0)
+		xobj = X3DObject(selectedObjects[0]);
+	else
 		root.AddPrimitive(L"EmptyPolygonMesh", CString(m_fileName.c_str()), xobj);
 
-		// get a mesh builder from the newly created geometry
-		prim = xobj.GetActivePrimitive();
-	}
+	xobj.PutLocalScaling(vAutoScaling); // after creation: on an empty X3DObject this was a no-op
 
+	Primitive prim = xobj.GetActivePrimitive();
 	PolygonMesh mesh = prim.GetGeometry();
 	if (!mesh.IsValid()) {
 		app.LogMessage(L"The selected object is not a polygon mesh.", siErrorMsg);

@@ -87,16 +87,16 @@ function ParseShaderTree_arnoldrender(instance, material, folder)
 			Ns = "Ns " + shader.parameters('specular_roughness').Value + "\n";
 			if(shader.parameters('specular_roughness').Sources.Count != 0 && shader.parameters('specular_roughness').Sources.Item(0).Parent.ProgID == "Softimage.txt2d-image-explicit.1.0")
 				map_Ns = "map_Ns " + getSIImageFileName(shader.parameters('specular_roughness').Sources.Item(0).Parent).replace(folder, "") + "\n";
-			else if(shader.specular_roughness.Sources.Count != 0 && specular_roughness.specular_color.Sources.Item(0).Parent.ProgID == "Arnold.image.1.0")
-				map_Ns = "map_Ns "  + getAImageFileName(shader.specular_roughness.Sources.Item(0).Parent).replace(folder, "") + "\n";
-		
+			else if(shader.parameters('specular_roughness').Sources.Count != 0 && shader.parameters('specular_roughness').Sources.Item(0).Parent.ProgID == "Arnold.image.1.0")
+				map_Ns = "map_Ns "  + getAImageFileName(shader.parameters('specular_roughness').Sources.Item(0).Parent).replace(folder, "") + "\n";
+
 			break; // use only first shader found
 		}
 		i++;
-	}		
-	
-	return Kd + Ks + Ka + Ns + map_Kd + map_Ks + map_Ka + map_Ns + "\n";
-} 
+	}
+
+	return Kd + Ks + Ka + Ns + Kt + map_Kd + map_Ks + map_Ka + map_Ns + map_Kt + "\n";
+}
 
 
 /**** MENTAL RAY *****/
@@ -177,7 +177,6 @@ function ParseShaderTree_mentalray(instance, material, folder)
 				map_Ka = "map_Ka " + getSIImageFileName(shader.ambient.Sources.Item(0).Parent).replace(folder, "") + "\n";
 					
 			if(shader.ProgID != "Softimage.material-lambert.1.0") {
-			 logmessage("phong");
 				Ks = "Ks "  + round6(shader.specular.parameters("red").Value) + " " + round6(shader.specular.parameters('green').Value) + " " + round6(shader.specular.parameters('blue').Value) + "\n";
 				if(shader.specular.Sources.Count != 0 && shader.specular.Sources.Item(0).Parent.ProgID == "Softimage.txt2d-image-explicit.1.0") 
 					map_Ks = "map_Ks " + getSIImageFileName(shader.specular.Sources.Item(0).Parent).replace(folder, "") + "\n";			
@@ -228,8 +227,8 @@ function XSILoadPlugin( in_reg )
 {
 	in_reg.Author = "Admin";
 	in_reg.Name = "Additional File Formats JS Plug-in";
-	in_reg.Major = 1;
-	in_reg.Minor = 0;
+	in_reg.Major = 4;
+	in_reg.Minor = 5;
 
 	in_reg.RegisterProperty ("FileFormatOptions");
 	in_reg.RegisterEvent ("FileFormatOptions_OnStartup", siOnStartup);
@@ -268,23 +267,23 @@ function ParseShaderTree_Init( in_ctxt )
 	return true;
 }
 
-function ParseShaderTree_Execute( instance, material, folder )
-{	
-	var strRenderer = String(GetCurrentPass().Renderer).replace(" ", "").toLowerCase();
+// name of the per-renderer callback for the current pass, e.g. "ParseShaderTree_mentalray" or "ApplyShaderTree_arnoldrender"
+function rendererCallbackName( prefix )
+{
+	var strRenderer = String(GetCurrentPass().Renderer).toLowerCase().replace(/[^a-z0-9_]/g, "");
+	return prefix + "_" + strRenderer;
+}
 
-		
-	try {
-		return eval("ParseShaderTree_" + strRenderer + "(instance, material, folder);"); // applies material to element	
+function ParseShaderTree_Execute( instance, material, folder )
+{
+	var strCallback = rendererCallbackName("ParseShaderTree");
+
+	if (eval("typeof " + strCallback) != "function") {
+		LogMessage("AdditionalFileFormats.js: Callback '" + strCallback + "()' not implemented for Current Pass Renderer - Default Materials will be written.", siWarningMsg);
+		return "Kd 1 1 1\nKs 0.5 0.5 0.5\nKa 0 0 0\n";
 	}
-	catch(e)
-	{
-		if(strRenderer != "" && e.number>>>0 == 0x1111800A138F) {
-			LogMessage("AdditionalFileFormats.js: Callback 'ParseShaderTree_" + strRenderer + "()' not implemented for Current Pass Renderer - Default Materials will be written.", siWarningMsg);
-			return "Kd 1 1 1\nKs 0.5 0.5 0.5\nKa 0 0 0\n";
-		}
-		else
-			throw(e);
-	}
+
+	return eval(strCallback + "(instance, material, folder);");
 }
 
 function ApplyShaderTree_Init( in_ctxt )
@@ -303,10 +302,11 @@ function ApplyShaderTree_Init( in_ctxt )
 // this is used as a callback, called from inside cpp command ImportOBJ
 function ApplyShaderTree_Execute( matName, matDefinitionAsJson, objList, folder )
 {
-	var strRenderer = String(GetCurrentPass().Renderer).replace(" ", "").toLowerCase();
-	
+	var strCallback = rendererCallbackName("ApplyShaderTree");
+
+	var material;
 	try {
-		eval(matDefinitionAsJson); // evals "material"	
+		eval(matDefinitionAsJson); // evals "material"
 	}
 	catch(e)
 	{
@@ -314,19 +314,12 @@ function ApplyShaderTree_Execute( matName, matDefinitionAsJson, objList, folder 
 		return;
 	}
 
-	eval("ApplyShaderTree_" + strRenderer + "(matName, material, objList, folder);"); // applies material to element		
-	return;
-	
-	try {
-		eval("ApplyShaderTree_" + strRenderer + "(matName, material, objList, folder);"); // applies material to element	
+	if (eval("typeof " + strCallback) != "function") {
+		LogMessage("AdditionalFileFormats.js: Callback '" + strCallback + "()' not implemented for Current Pass Renderer - No Materials will be created.", siWarningMsg);
+		return;
 	}
-	catch(e)
-	{
-		if(strRenderer != "" && e.number>>>0 == 0x800A138F)
-			LogMessage("AdditionalFileFormats.js: Callback 'ApplyShaderTree_" + strRenderer + "()' not implemented for Current Pass Renderer - No Materials will be created.", siWarningMsg);
-		else
-			throw(e);
-	}
+
+	eval(strCallback + "(matName, material, objList, folder);"); // applies material to element
 }
  
 function FileFormatOptions_OnStartup_OnEvent(in_ctxt)
@@ -374,8 +367,6 @@ function FileFormatOptions_Define( in_ctxt )
 	oCustomProperty.AddParameter3("PLY_DefaultPath", siString );
 	oCustomProperty.AddParameter3("PLY_LastUsedPath", siString );
 	oCustomProperty.AddParameter3("PLY_rememberLastUsedPath", siBool, 1, null,  null, false );
-	oCustomProperty.AddParameter3("PLY_Format", siInt4, 0, 0, 1, false );
-	oCustomProperty.AddParameter3("PLY_LocalCoords", siBool, 0, 0, 1, false );
 
 	return true;
 }
@@ -427,14 +418,14 @@ function FileFormatOptions_DefineLayout( in_ctxt )
 	oLayout.EndGroup();
 	
 	oLayout.AddGroup ("Import");
-	
-		oItem = oLayout.AddString( "Description", true, true, 200 );
-		
+
+		oLayout.AddStaticText( "Import creates a new polygon mesh, or replaces the mesh of the selected object." );
+
 	oLayout.EndGroup();
-	
+
 	oLayout.AddGroup ("Export");
 		oLayout.AddGroup ("File Format");
-		
+
 			oItem = oLayout.AddEnumControl("STL_Format", Array("Binary STL Format", 0, "ASCII STL Format", 1 ), "", siControlRadio );
 			oItem.SetAttribute( siUINoLabel, true );
 			oItem = oLayout.AddItem( "STL_LocalCoords", "Use Local Coordinates")
@@ -451,40 +442,18 @@ function FileFormatOptions_DefineLayout( in_ctxt )
 		
 	oLayout.EndGroup();
 	
-	oLayout.AddGroup ("Import");	
-	
-		oItem = oLayout.AddString( "Description", true, true, 200 );
-		
-	oLayout.EndGroup();
-	
-	oLayout.AddGroup ("Export");
-		oLayout.AddGroup ("File Format");
-			
-			var oItem = oLayout.AddEnumControl( "PLY_Format", Array("Binary PLY Format", 0, "ASCII PLY Format", 1 ), "", siControlRadio );
-			oItem.SetAttribute( siUINoLabel, true );
-			oItem = oLayout.AddItem( "PLY_LocalCoords", "Use Local Coordinates");		
-	
-		oLayout.EndGroup();
-	oLayout.EndGroup();
-	
-    oLayout.SetAttribute (siUIHelpFile, "<FactoryPath>/Doc/<DocLangPref>/xsidocs.chm::/menubar14.htm");
-	
-	return true;
-}  
+	oLayout.AddGroup ("Import");
 
-function FileFormatOptions_OnInit( )
-{	
-	FileFormatOptions_ObjImport_rememberLastUsedPath_OnChanged
+		oLayout.AddStaticText( "Import creates a new polygon mesh with vertex colors and UVs when the file has them. There is no PLY export." );
+
+	oLayout.EndGroup();
+
+	return true;
 }
 
 function FileFormatOptions_OnClosed( )
 {
 	Application.LogMessage ("FileFormatOptions_OnClosed called", siVerbose);
-}
- 
-function FileFormatOptions_ObjImport_rememberLastUsedPath_OnChanged()
-{
-	PPG.Stl_LastUsedPath.Enable(PPG.Stl_rememberLastUsedPath);
 }
 
 function ShowExportSTLFileBrowser( in_ctxt )
@@ -583,7 +552,7 @@ function ShowImportOBJFileBrowser( in_ctxt )
 
 	if (oFileBrowser.FilePathName != "") {
 		if(Selection.Count > 0) {
-			var btn = XSIUIToolkit.Msgbox( "Update first selected object with new mesh?", siMsgYesNoCancel | siMsgQuestion, "Import STL" ) ;
+			var btn = XSIUIToolkit.Msgbox( "Update first selected object with new mesh?", siMsgYesNoCancel | siMsgQuestion, "Import OBJ" ) ;
 			if ( btn == siMsgNo )
 				DeselectAll();
 			else if ( btn == siMsgYes) {

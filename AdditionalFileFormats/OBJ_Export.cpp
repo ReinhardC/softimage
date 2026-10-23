@@ -1,19 +1,27 @@
 #include "OBJ.h"
 
-#define log app.LogMessage
-
 CStatus COBJ::Execute_Export(CRefArray& inObjects, string initFilePathName, bool bExportMask, bool bExportVertexColors, bool bSeparateFiles, bool bWriteMTLFile, bool bExportLocalCoords)
 {
 	XSI::Application app;
 
 	initStrings(initFilePathName);
 
-	if ((m_pFile = fopen(m_filePathName.c_str(), "wb")) == NULL)
-		return CStatus::Fail;
+	if (bSeparateFiles)
+		app.LogMessage(L"ExportOBJ: ExportToSeparateFiles is not implemented, all objects are written to one file.", siWarningMsg);
 
-	if (bWriteMTLFile)
-		if ((m_matfile = fopen((m_filePath + m_fileName + string(".mtl")).c_str(), "wb")) == NULL)
+	if ((m_pFile = fopen(m_filePathName.c_str(), "wb")) == NULL) {
+		app.LogMessage("Could not create '" + CString(m_filePathName.c_str()) + "'.", siErrorMsg);
+		return CStatus::Fail;
+	}
+
+	if (bWriteMTLFile) {
+		string matFilePathName = m_filePath + m_fileName + string(".mtl");
+		if ((m_matfile = fopen(matFilePathName.c_str(), "wb")) == NULL) {
+			app.LogMessage("Could not create '" + CString(matFilePathName.c_str()) + "'.", siErrorMsg);
+			fclose(m_pFile);
 			return CStatus::Fail;
+		}
+	}
 
 	// output header
 	Output(m_pFile, "# Custom Wavefront OBJ Exporter\r\n");
@@ -93,8 +101,9 @@ CStatus COBJ::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 			ClusterProperty foundMaskProperty(CFileFormat::getMaskProperty(xobj));
 			ClusterProperty foundRGBProperty(CFileFormat::getVertexColorProperty(xobj));
 
-			bool bMaskValid = foundMaskProperty.IsValid();
-			bool bRGBValid = foundRGBProperty.IsValid();
+			// each part is written only if it was asked for and the object has the property
+			bool bMaskValid = bExportMask && foundMaskProperty.IsValid();
+			bool bRGBValid = bExportVertexColors && foundRGBProperty.IsValid();
 
 			if (bMaskValid || bRGBValid) {
 
@@ -109,7 +118,7 @@ CStatus COBJ::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 				CFloatArray FA_Mask, FA_RGBA_perSample;
 				CBitArray flags_Mask, flags_RGBA_perSample;
 
-				int i_max;
+				int i_max = 0;
 
 				if (bMaskValid) {
 					foundMaskProperty.GetValues(FA_Mask, flags_Mask);

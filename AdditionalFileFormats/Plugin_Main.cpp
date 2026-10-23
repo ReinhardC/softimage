@@ -18,7 +18,7 @@ XSIPLUGINCALLBACK CStatus XSILoadPlugin(PluginRegistrar& in_reg)
 {
 	in_reg.PutAuthor(L"Claus");
 	in_reg.PutName(L"Additional File Formats Plug-in");
-	in_reg.PutVersion(1, 0);
+	in_reg.PutVersion(4, 5); // keep in sync with the release history in README.md
 	
 	in_reg.RegisterCommand(L"ImportPLY");
 	in_reg.RegisterCommand(L"ImportSTL");
@@ -44,7 +44,7 @@ XSIPLUGINCALLBACK CStatus ImportSTL_Init(CRef& in_ctxt)
 	args.AddWithHandler(L"Objects", siArgHandlerCollection, L"");
 	args.Add(L"FileName");
 
-	cmd.PutDescription(L"ImportSTL([str]FolderAndFilename)");
+	cmd.PutDescription(L"ImportSTL([col]ObjectToReplace, [str]FolderAndFilename)");
 
 	return CStatus::OK;
 }
@@ -79,7 +79,7 @@ XSIPLUGINCALLBACK CStatus ExportSTL_Init(CRef& in_ctxt)
 	args.Add(L"ExportBinaryFormat", true);
 	args.Add(L"UseLocalCoords", false);
 
-	cmd.PutDescription(L"ExportOBJ([col]Objects, [str]FolderAndFileName, [bool]ExportBinaryFormat, [bool]UseLocalCoords)");
+	cmd.PutDescription(L"ExportSTL([col]Objects, [str]FolderAndFileName, [bool]ExportBinaryFormat, [bool]UseLocalCoords)");
 
 	return CStatus::OK;
 }
@@ -163,7 +163,7 @@ XSIPLUGINCALLBACK CStatus ImportOBJ_Init(CRef& in_ctxt)
 	args.Add(L"OBJ_CreateObjectsTag", "g");
 	args.Add(L"OBJ_CreateClustersTag", "usemtl");
 	
-	cmd.PutDescription(L"ImportOBJ(string FolderAndFilename, bool importUV, bool importNormals, bool importZBrushMask, bool import ZBrushPolypaint, string creatObjectsTag, string createClustesTag)");
+	cmd.PutDescription(L"ImportOBJ([col]ObjectToReplace, [str]FolderAndFilename, [bool]ImportUVs, [bool]ImportUserNormals, [bool]ImportZBrushMask, [bool]ImportZBrushPolypaint, [str]CreateObjectsTag, [str]CreateClustersTag)");
 
 	return CStatus::OK;
 }

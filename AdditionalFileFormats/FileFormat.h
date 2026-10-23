@@ -97,20 +97,27 @@ protected:
 		return elems;
 	}
 
+	// splits in place at delimiter. For ' ' tabs count as delimiters too and leading whitespace is skipped.
+	// Consecutive delimiters are collapsed unless keepEmpty is set ("1//3" yields "1", "", "3" for OBJ faces).
 	vector<char*> quickSplit(char* split_this, char delimiter, bool keepEmpty = false)
 	{
-		int i = 0;
+		bool bWhitespace = (delimiter == ' ');
 		vector<char*> result;
+		if (bWhitespace)
+			while (*split_this == ' ' || *split_this == '\t')
+				split_this++;
 		result.push_back(split_this);
+		int i = 0;
 		while (split_this[i] != '\0') {
-			if (split_this[i] == delimiter) {
+			char c = split_this[i];
+			if (c == delimiter || (bWhitespace && c == '\t')) {
 				split_this[i] = '\0';
 				char next = split_this[i + 1];
-				// keepEmpty: "1//3" yields three fields ("1", "", "3"), needed for the OBJ face format
-				if (keepEmpty || (next != delimiter && next != '\r' && next != '\n' && next != '\0'))
+				bool bNextIsDelimiter = next == delimiter || (bWhitespace && next == '\t');
+				if (keepEmpty || (!bNextIsDelimiter && next != '\r' && next != '\n' && next != '\0'))
 					result.push_back(split_this + i + 1);
 			}
-			else if (split_this[i] == '\n' || split_this[i] == '\r')
+			else if (c == '\n' || c == '\r')
 				split_this[i] = '\0';
 			i++;
 		}
