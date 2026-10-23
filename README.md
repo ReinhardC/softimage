@@ -50,6 +50,7 @@ build instructions:
 * open .sln file in Visual Studio 2019 or newer (the project uses the v142 toolset, pick another one in the project settings if needed)
 * set build configuration to x64 (release or debug)
 * build solution (the post-build step copies the DLL into the repository Workgroup folder)
+* to build the add-on package, run `AdditionalFileFormats/build_addon.py` in Softimage's Script Editor (Python): `execfile(r'<repository>\AdditionalFileFormats\build_addon.py')`; it writes `release/AdditionalFileFormats.xsiaddon` (ignored by git) from the DLL and the JScript plugin in `Workgroup`
 
 debug instructions:
 -------------------------
