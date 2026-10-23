@@ -64,12 +64,12 @@ public:
 	vector<long> PolygonPointCounts;
 	vector<double> PointPositions;
 	vector<long> PointIndices;
-	long next_meshIx = 0;
-	unordered_map<long, long> meshIxFromFileIx_lookup;
-	unordered_map<long, long> fileIxFromMeshIx_lookup;
+	vector<long> fileIxFromMeshIx; // mesh point index -> file vertex index
+	unordered_map<long, long> sharedMeshIxFromFileIx; // only for file vertices that another mesh used first (rare), see COBJ::m_ownerOfFileIx
 	unordered_map<string, CLongArray> IcsMaterialClusters;
 
 	bool bHasNormals = false;
+	bool bNormalsIncomplete = false; // some polygon corners have no normal index: user normals are skipped for this mesh
 	vector <float> Normals;
 
 	bool bHasUVs = false;
@@ -92,6 +92,11 @@ class COBJ : public CFileFormat
 	vector<double> PP_inFile;
 	vector<float> RGB_inFile;
 	vector<float> Mask_inFile;
+
+	// file-wide point lookup, indexed by file vertex: the mesh that first used the vertex and its point index there
+	// (a plain vector is much faster than a map per mesh; vertices shared by several meshes go to MeshData::sharedMeshIxFromFileIx)
+	vector<MeshData*> m_ownerOfFileIx;
+	vector<long> m_meshIxOfFileIx;
 
 	MATH::CVector3 vAutoScaling; // auto scale meshes
 

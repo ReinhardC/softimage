@@ -129,11 +129,11 @@ CStatus COBJ::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 					foundRGBProperty.GetValues(FA_RGBA_perSample, flags_RGBA_perSample);
 
 					FA_RGB_perPoint.Resize(3 * mesh.GetPoints().GetCount());
-					for (long i = 0, i_max = FA_RGB_perPoint.GetCount(); i < i_max; i++)
+					for (long i = 0, n = FA_RGB_perPoint.GetCount(); i < n; i++)
 						FA_RGB_perPoint[i] = 0.0;
 
 					LA_RGBCounts_perPoint.Resize(mesh.GetPoints().GetCount());
-					for (long i = 0, i_max = LA_RGBCounts_perPoint.GetCount(); i < i_max; i++)
+					for (long i = 0, n = LA_RGBCounts_perPoint.GetCount(); i < n; i++)
 						LA_RGBCounts_perPoint[i] = 0;
 
 					// reorder sample property to vertices (average)
@@ -282,7 +282,7 @@ CStatus COBJ::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 
 
 			CValue rVal;
-			CValueArray& args = CValueArray();
+			CValueArray args;
 			args.Add(xobj.GetRef());
 			args.Add(material.GetRef());
 			args.Add(CString(m_filePath.c_str()));

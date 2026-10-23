@@ -10,7 +10,6 @@
 #include "stl.h"
 #include "ply.h"
 
-#include "FileBrowser.h"
 
 using namespace XSI;
 
@@ -44,7 +43,7 @@ XSIPLUGINCALLBACK CStatus ImportSTL_Init(CRef& in_ctxt)
 	args.AddWithHandler(L"Objects", siArgHandlerCollection, L"");
 	args.Add(L"FileName");
 
-	cmd.PutDescription(L"ImportSTL([col]ObjectToReplace, [str]FolderAndFilename)");
+	cmd.PutDescription(L"ImportSTL([col]ObjectToReplace, [str]FolderAndFilename) - an empty collection means the current selection; deselect all to create a new object");
 
 	return CStatus::OK;
 }
@@ -163,7 +162,7 @@ XSIPLUGINCALLBACK CStatus ImportOBJ_Init(CRef& in_ctxt)
 	args.Add(L"OBJ_CreateObjectsTag", "g");
 	args.Add(L"OBJ_CreateClustersTag", "usemtl");
 	
-	cmd.PutDescription(L"ImportOBJ([col]ObjectToReplace, [str]FolderAndFilename, [bool]ImportUVs, [bool]ImportUserNormals, [bool]ImportZBrushMask, [bool]ImportZBrushPolypaint, [str]CreateObjectsTag, [str]CreateClustersTag)");
+	cmd.PutDescription(L"ImportOBJ([col]ObjectToReplace, [str]FolderAndFilename, [bool]ImportUVs, [bool]ImportUserNormals, [bool]ImportZBrushMask, [bool]ImportZBrushPolypaint, [str]CreateObjectsTag, [str]CreateClustersTag) - an empty collection means the current selection; deselect all to create new objects");
 
 	return CStatus::OK;
 }
@@ -201,8 +200,10 @@ XSIPLUGINCALLBACK CStatus ImportPLY_Init(CRef& in_ctxt)
 
 	ArgumentArray args = cmd.GetArguments();
 	args.Add(L"FileName");
+	args.Add(L"ImportUVs", true);
+	args.Add(L"ImportVertexColors", true);
 
-	cmd.PutDescription(L"ImportPLY([str]FolderAndFilename)");
+	cmd.PutDescription(L"ImportPLY([str]FolderAndFilename, [bool]ImportUVs, [bool]ImportVertexColors)");
 
 	return CStatus::OK;
 }
@@ -215,6 +216,8 @@ XSIPLUGINCALLBACK CStatus ImportPLY_Execute(XSI::CRef& in_ctxt)
 	Command cmd = ctxt.GetSource();
 	ArgumentArray args = cmd.GetArguments();
 	CString strFolderAndFileName(args.GetItem(0).GetValue());
+	bool bImportUVs(args.GetItem(1).GetValue());
+	bool bImportVertexColors(args.GetItem(2).GetValue());
 
 	if (strFolderAndFileName.IsEmpty()) {
 		app.LogMessage(L"No Filename Specified in Arguments");
@@ -222,5 +225,5 @@ XSIPLUGINCALLBACK CStatus ImportPLY_Execute(XSI::CRef& in_ctxt)
 	}
 
 	CPLY ply;
-	return ply.Execute_Import(strFolderAndFileName.GetAsciiString(), true, true, true, true);
+	return ply.Execute_Import(strFolderAndFileName.GetAsciiString(), bImportUVs, bImportVertexColors);
 }

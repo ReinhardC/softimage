@@ -79,6 +79,5 @@ class CPLY : public CFileFormat {
 public:
 	string getFormatName() { return "PLY"; }
 
-	CStatus Execute_Import(string initFilePathName, bool, bool, bool, bool);
-	//CStatus Execute_Export(CRefArray& inObjects, string initFilePathName, bool bExportPolypaint, bool bSeparateFiles, bool bExportLocalCoords, bool bBinary);
+	CStatus Execute_Import(string initFilePathName, bool bImportUVs, bool bImportVertexColors);
 };

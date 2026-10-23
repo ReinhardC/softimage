@@ -11,6 +11,14 @@ static long resolveObjIndex(const char* token, long nbDefined)
 	return (ix >= 0 && ix < nbDefined) ? ix : -1;
 }
 
+// true if the whole token parses as a number (used to skip the numeric values of MTL texture options)
+static bool isNumberToken(const char* token)
+{
+	char* end = NULL;
+	strtod(token, &end);
+	return end != token && *end == '\0';
+}
+
 CStatus COBJ::Execute_Import(CRefArray& selectedObjects, string initFilePathName)
 {
 	Application app;
@@ -88,10 +96,10 @@ CStatus COBJ::Execute_Import(CRefArray& selectedObjects, string initFilePathName
 		bool bImportWithOriginalPointOrder = (nbMeshes == 1 && pCurrentMesh->PointPositions.size() == PP_inFile.size() && pCurrentMesh->Mask.size() == Mask_inFile.size());
 
 		if(bImportWithOriginalPointOrder) {
-			app.LogMessage("Found only 1 mesh. We can import using the original point order", siWarningMsg);
+			app.LogMessage("Found only 1 mesh. We can import using the original point order", siInfoMsg);
 			// restore original file vertex order (important for zbrush base mesh reimport for example)
-			for (auto i = 0; i < pCurrentMesh->PointIndices.size(); i++) {
-				pCurrentMesh->PointIndices[i] = pCurrentMesh->fileIxFromMeshIx_lookup[pCurrentMesh->PointIndices[i]];
+			for (size_t i = 0; i < pCurrentMesh->PointIndices.size(); i++) {
+				pCurrentMesh->PointIndices[i] = pCurrentMesh->fileIxFromMeshIx[pCurrentMesh->PointIndices[i]];
 			}
 			meshBuilder.AddVertices(PP_inFile.size() / 3, &PP_inFile[0]);
 		}
@@ -151,8 +159,12 @@ CStatus COBJ::Execute_Import(CRefArray& selectedObjects, string initFilePathName
 		}
 
 		if (Prefs.OBJ_ImportUserNormals && pCurrentMesh->bHasNormals) {
-			ClusterProperty normals = cpBuilder.AddUserNormal();
-			normals.SetValues(&pCurrentMesh->Normals[0], pCurrentMesh->Normals.size() / 3);
+			if (pCurrentMesh->bNormalsIncomplete)
+				app.LogMessage("Mesh '" + CString(pCurrentMesh->name.c_str()) + "': some polygons have no normal indices, user normals are not imported for it (zero normals would shade black).", siWarningMsg);
+			else {
+				ClusterProperty normals = cpBuilder.AddUserNormal();
+				normals.SetValues(&pCurrentMesh->Normals[0], pCurrentMesh->Normals.size() / 3);
+			}
 		}
 	}
 
@@ -321,13 +333,36 @@ CStatus COBJ::Import(string filePathNam,
 					break;
 				}
 
+				// file vertex -> point of the current mesh (created on first use)
+				if (fileIx >= (long)m_ownerOfFileIx.size()) {
+					m_ownerOfFileIx.resize(nbPP_inFile, NULL);
+					m_meshIxOfFileIx.resize(nbPP_inFile, -1);
+				}
+
 				long meshIx;
-				auto found = pCurrentMesh->meshIxFromFileIx_lookup.find(fileIx);
-				if (found == pCurrentMesh->meshIxFromFileIx_lookup.end()) {
-					meshIx = pCurrentMesh->next_meshIx;
-					pCurrentMesh->next_meshIx++;
-					pCurrentMesh->fileIxFromMeshIx_lookup.insert({ meshIx, fileIx });
-					pCurrentMesh->meshIxFromFileIx_lookup.insert({ fileIx, meshIx });
+				bool bNewPoint = false;
+				MeshData* pOwner = m_ownerOfFileIx[fileIx];
+				if (pOwner == pCurrentMesh)
+					meshIx = m_meshIxOfFileIx[fileIx];
+				else if (pOwner == NULL) {
+					meshIx = (long)pCurrentMesh->fileIxFromMeshIx.size();
+					m_ownerOfFileIx[fileIx] = pCurrentMesh;
+					m_meshIxOfFileIx[fileIx] = meshIx;
+					bNewPoint = true;
+				}
+				else { // the vertex already belongs to another mesh (rare): per mesh map for these
+					auto found = pCurrentMesh->sharedMeshIxFromFileIx.find(fileIx);
+					if (found != pCurrentMesh->sharedMeshIxFromFileIx.end())
+						meshIx = found->second;
+					else {
+						meshIx = (long)pCurrentMesh->fileIxFromMeshIx.size();
+						pCurrentMesh->sharedMeshIxFromFileIx.insert({ fileIx, meshIx });
+						bNewPoint = true;
+					}
+				}
+
+				if (bNewPoint) {
+					pCurrentMesh->fileIxFromMeshIx.push_back(fileIx);
 					pCurrentMesh->PointPositions.push_back(PP_inFile[3 * fileIx]);
 					pCurrentMesh->PointPositions.push_back(PP_inFile[3 * fileIx + 1]);
 					pCurrentMesh->PointPositions.push_back(PP_inFile[3 * fileIx + 2]);
@@ -335,8 +370,6 @@ CStatus COBJ::Import(string filePathNam,
 					if (bFileHasPolypaint && fileIx < nbMask_inFile)
 						pCurrentMesh->Mask.push_back(Mask_inFile[fileIx]);
 				}
-				else
-					meshIx = found->second;
 
 				pCurrentMesh->PointIndices.push_back(meshIx);
 
@@ -380,7 +413,9 @@ CStatus COBJ::Import(string filePathNam,
 							app.LogMessage(L"A polygon in line " + CString(line_in_file + 1) + " inside " + CString(m_fileNameWithExt.c_str()) + L" is defined with missing normal vector entries. Loading normals is disabled for the rest of this import.", siErrorMsg);
 							Prefs.OBJ_ImportUserNormals = false;
 						}
-						pCurrentMesh->Normals.push_back(0.0); //TODO: to be be replaced by actual normal later on
+						// keep the array aligned with the samples; the mesh is flagged so no user normals get created from it
+						pCurrentMesh->bNormalsIncomplete = true;
+						pCurrentMesh->Normals.push_back(0.0);
 						pCurrentMesh->Normals.push_back(0.0);
 						pCurrentMesh->Normals.push_back(0.0);
 					}
@@ -574,10 +609,21 @@ CStatus COBJ::Import(string filePathNam,
 				material_map[currentMatName].append(firstToken);
 				material_map[currentMatName].append(": ");
 
-				if (!strncmp(firstToken, "map", 3))
+				if (!strncmp(firstToken, "map", 3) || STR_EQUAL(firstToken, "bump") || STR_EQUAL(firstToken, "disp") || STR_EQUAL(firstToken, "decal") || STR_EQUAL(firstToken, "refl"))
 				{
+					// skip texture options such as "-s 1 1 1", "-bm 0.5" or "-clamp on": what remains is the file name
+					size_t i = 1;
+					while (i < nbTokens && tokens[i][0] == '-' && tokens[i][1] != '\0' && !isdigit((unsigned char)tokens[i][1])) {
+						const char* option = tokens[i++];
+						if (STR_EQUAL(option, "-o") || STR_EQUAL(option, "-s") || STR_EQUAL(option, "-t") || STR_EQUAL(option, "-mm")) {
+							while (i < nbTokens && isNumberToken(tokens[i])) // 1 to 3 values
+								i++;
+						}
+						else if (i < nbTokens) // every other option takes exactly one value
+							i++;
+					}
+
 					material_map[currentMatName].append("\"");
-					int i = 1;
 					while (i < nbTokens) { // recombine tokens with spaces
 						material_map[currentMatName] += tokens[i++];
 						if (i < nbTokens)

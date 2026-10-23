@@ -31,9 +31,9 @@ uninstallation instructions:
 build instructions:
 -------------------------
 * set XSISDK_ROOT environment variable to path of your XSISDK directory
-* open .sln file in VS2017 community edition or compatible
+* open .sln file in Visual Studio 2019 or newer (the project uses the v142 toolset, pick another one in the project settings if needed)
 * set build configuration to x64 (release or debug)
-* build solution
+* build solution (the post-build step copies the DLL into the repository Workgroup folder)
 
 debug instructions:
 -------------------------

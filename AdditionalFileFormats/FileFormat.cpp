@@ -28,7 +28,7 @@ CRef CFileFormat::getVertexColorProperty(X3DObject xobj)
 		// iterate color at vertex properties of clusters
 		for (long iProperty = 0, iProperty_max = cavProperties.GetCount(); iProperty < iProperty_max; iProperty++) {
 
-			CRef& propertyRef = cavProperties.GetItem(iProperty);
+			CRef propertyRef = cavProperties.GetItem(iProperty);
 			ClusterProperty property(propertyRef);
 
 			if (!foundPropertyRef.IsValid()) 
@@ -64,7 +64,7 @@ CRef CFileFormat::getMaskProperty(X3DObject xobj)
 		// iterate color at vertex properties of clusters
 		for (long iProperty = 0, iProperty_max = wmProperties.GetCount(); iProperty < iProperty_max; iProperty++) {
 
-			CRef& propertyRef = wmProperties.GetItem(iProperty);
+			CRef propertyRef = wmProperties.GetItem(iProperty);
 			ClusterProperty property(propertyRef);
 
 			if (!foundPropertyRef.IsValid())
