@@ -228,7 +228,7 @@ function XSILoadPlugin( in_reg )
 	in_reg.Author = "Admin";
 	in_reg.Name = "Additional File Formats JS Plug-in";
 	in_reg.Major = 4;
-	in_reg.Minor = 5;
+	in_reg.Minor = 6;
 
 	in_reg.RegisterProperty ("FileFormatOptions");
 	in_reg.RegisterEvent ("FileFormatOptions_OnStartup", siOnStartup);
