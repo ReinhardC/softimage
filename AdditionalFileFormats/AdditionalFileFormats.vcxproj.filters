@@ -32,6 +32,9 @@
     <ClInclude Include="f3hash.h">
       <Filter>headers</Filter>
     </ClInclude>
+    <ClInclude Include="FastIO.h">
+      <Filter>headers</Filter>
+    </ClInclude>
     <ClInclude Include="FileFormat.h">
       <Filter>headers</Filter>
     </ClInclude>

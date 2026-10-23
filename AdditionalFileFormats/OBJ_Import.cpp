@@ -1,12 +1,13 @@
 #include "OBJ.h"
+#include "FastIO.h"
 
-//TODO: reserve memory for push_back for performance
+using fastio::parseDouble;
 
 // Resolves a 1-based OBJ index token to a 0-based index. Negative values are relative to the
 // number of elements defined so far (OBJ spec). Returns -1 when the index is invalid or undefined.
 static long resolveObjIndex(const char* token, long nbDefined)
 {
-	long v = atol(token);
+	long v = fastio::parseLong(token);
 	long ix = v > 0 ? v - 1 : (v < 0 ? nbDefined + v : -1);
 	return (ix >= 0 && ix < nbDefined) ? ix : -1;
 }
@@ -297,7 +298,7 @@ CStatus COBJ::Import(string filePathNam,
 
 	long current_action_id = 0; // inactve
 	long nbModeSwitches2 = 0, nbModeSwitches3 = 0, nbModeSwitches4 = 0, nbModeSwitches5 = 0, nbModeSwitches6 = 0;
-	long long pos_in_file_bytes = 0, last_pos_in_file_bytes, actual_bytes_read;
+	long long pos_in_file_bytes = 0;
 	int line_in_file = 0;
 	long nextFileOrder = 0;
 
@@ -308,21 +309,19 @@ CStatus COBJ::Import(string filePathNam,
 		if (!fgets(pbuf, max_line_length, m_pFile))
 			break;
 
-		last_pos_in_file_bytes = pos_in_file_bytes;
-		pos_in_file_bytes = _ftelli64(m_pFile);
-		actual_bytes_read = pos_in_file_bytes - last_pos_in_file_bytes + 1;
-
-		// realloc if buffer is too small
-		while (actual_bytes_read == max_line_length && *(pbuf + max_line_length - 2) != '\n') {
+		// grow the buffer until the whole line is in (long lines happen with big ngons); the line
+		// length tracks the file position, which saves a file position query per line
+		size_t len = strlen(pbuf);
+		while (len > 0 && pbuf[len - 1] != '\n' && !feof(m_pFile)) {
 			max_line_length += increment_bytes;
 			pbuf = (char*)realloc(pbuf, max_line_length);
 
-			if (!fgets(pbuf + max_line_length - increment_bytes - 1, increment_bytes + 1, m_pFile))
+			if (!fgets(pbuf + len, max_line_length - (int)len, m_pFile))
 				break;
 
-			pos_in_file_bytes = _ftelli64(m_pFile);
-			actual_bytes_read = pos_in_file_bytes - last_pos_in_file_bytes + 1;
+			len += strlen(pbuf + len);
 		}
+		pos_in_file_bytes += len;
 
 		vector<char*> tokens = quickSplit(pbuf, ' '); // speed opt std::string => char*
 
@@ -504,10 +503,10 @@ CStatus COBJ::Import(string filePathNam,
 			}
 
 			// kept as double: float would lose precision for scans with large coordinates
-			double x = atof(secondToken);
+			double x = parseDouble(secondToken);
 			PP_inFile.push_back(x);
-			PP_inFile.push_back(atof(tokens[2]));
-			PP_inFile.push_back(atof(tokens[3]));
+			PP_inFile.push_back(parseDouble(tokens[2]));
+			PP_inFile.push_back(parseDouble(tokens[3]));
 
 			if (x > lfMaxExtentX) // for auto scale
 				lfMaxExtentX = x;
@@ -518,9 +517,9 @@ CStatus COBJ::Import(string filePathNam,
 			if (tokens.size() == 7) {
 				bFileHasPolypaint = true;
 				Mask_inFile.push_back(1.0);
-				RGB_inFile.push_back((float)atof(tokens[4]));
-				RGB_inFile.push_back((float)atof(tokens[5]));
-				RGB_inFile.push_back((float)atof(tokens[6]));
+				RGB_inFile.push_back((float)parseDouble(tokens[4]));
+				RGB_inFile.push_back((float)parseDouble(tokens[5]));
+				RGB_inFile.push_back((float)parseDouble(tokens[6]));
 				nbRGB_inFile++;
 				nbMask_inFile++;
 			}
@@ -538,9 +537,9 @@ CStatus COBJ::Import(string filePathNam,
 			}
 
 			// v and w are optional in the OBJ spec, missing components default to 0
-			UVs_inFile.push_back((float)atof(secondToken));
-			UVs_inFile.push_back(nbTokens > 2 ? (float)atof(tokens[2]) : 0.0f);
-			UVs_inFile.push_back(nbTokens > 3 ? (float)atof(tokens[3]) : 0.0f);
+			UVs_inFile.push_back((float)parseDouble(secondToken));
+			UVs_inFile.push_back(nbTokens > 2 ? (float)parseDouble(tokens[2]) : 0.0f);
+			UVs_inFile.push_back(nbTokens > 3 ? (float)parseDouble(tokens[3]) : 0.0f);
 
 			nbUVs_inFile++;
 		}
@@ -554,9 +553,9 @@ CStatus COBJ::Import(string filePathNam,
 					m_progress.PutCaption("Importing OBJ (Normals)");
 			}
 
-			Normals_inFile.push_back((float)atof(secondToken));
-			Normals_inFile.push_back(nbTokens > 2 ? (float)atof(tokens[2]) : 0.0f);
-			Normals_inFile.push_back(nbTokens > 3 ? (float)atof(tokens[3]) : 0.0f);
+			Normals_inFile.push_back((float)parseDouble(secondToken));
+			Normals_inFile.push_back(nbTokens > 2 ? (float)parseDouble(tokens[2]) : 0.0f);
+			Normals_inFile.push_back(nbTokens > 3 ? (float)parseDouble(tokens[3]) : 0.0f);
 
 			nbNormals_inFile++;
 		}

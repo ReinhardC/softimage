@@ -1,4 +1,5 @@
 #include "OBJ.h"
+#include "FastIO.h"
 
 CStatus COBJ::Execute_Export(CRefArray& inObjects, string initFilePathName, bool bExportMask, bool bExportVertexColors, bool bSeparateFiles, bool bWriteMTLFile, bool bExportLocalCoords)
 {
@@ -62,20 +63,28 @@ CStatus COBJ::ExportToFile(CRefArray& inObjects, string initFilePathName, bool b
 		}
 	}
 
+	// all text goes through a 1 MB buffer with in-place number formatting (to_string + fputs per line was the bottleneck)
+	fastio::CTextWriter w(m_pFile);
+
 	// output header
-	Output(m_pFile, "# Custom Wavefront OBJ Exporter\r\n");
+	w.put("# Custom Wavefront OBJ Exporter\r\n");
 
-	if (bWriteMTLFile)
-		Output(m_pFile, "\r\nmtllib " + m_fileName + ".mtl\r\n");
+	if (bWriteMTLFile) {
+		w.put("\r\nmtllib ");
+		w.put(m_fileName);
+		w.put(".mtl\r\n");
+	}
 
-	Output(m_pFile, "\r\no " + m_fileName + "\r\n");
+	w.put("\r\no ");
+	w.put(m_fileName);
+	w.put("\r\n");
 
 	long fails = 0;
 
 	m_progress.PutVisible(true);
 	m_progress.PutMaximum(3 * inObjects.GetCount());
 
-	for (long iObject = 0, iObject_max = inObjects.GetCount(); iObject < iObject_max; iObject++) 
+	for (long iObject = 0, iObject_max = inObjects.GetCount(); iObject < iObject_max; iObject++)
 	{
 		X3DObject xobj(inObjects[iObject]);
 		if (!xobj.IsValid()) {
@@ -83,7 +92,7 @@ CStatus COBJ::ExportToFile(CRefArray& inObjects, string initFilePathName, bool b
 			continue;
 		}
 
-		// Get a geometry accessor from the selected object	
+		// Get a geometry accessor from the selected object
 		XSI::Primitive prim = xobj.GetActivePrimitive();
 		XSI::PolygonMesh mesh = prim.GetGeometry();
 		if (!mesh.IsValid()) {
@@ -108,12 +117,14 @@ CStatus COBJ::ExportToFile(CRefArray& inObjects, string initFilePathName, bool b
 		// ************************************************
 		// * Export Vertex Positions
 
-		Output(m_pFile, "\r\ng " + string(xobj.GetName().GetAsciiString()) + "\r\n");
+		w.put("\r\ng ");
+		w.put(xobj.GetName().GetAsciiString());
+		w.put("\r\n");
 
 		m_progress.PutCaption("Exporting OBJ (Vertex Positions of '" + xobj.GetName() + "')");
 		m_progress.Increment();
 
-		Output(m_pFile, "\r\n# vertex positions\r\n");
+		w.put("\r\n# vertex positions\r\n");
 
 		MATH::CTransformation xfo = xobj.GetKinematics().GetGlobal().GetTransform();
 
@@ -124,10 +135,17 @@ CStatus COBJ::ExportToFile(CRefArray& inObjects, string initFilePathName, bool b
 			if (!bExportLocalCoords)
 				v = MATH::MapObjectPositionToWorldSpace(xfo, v);
 
-
-			Output(m_pFile, "v " + to_string(v.GetX()) + " " + to_string(v.GetY()) + " " + to_string(v.GetZ()) + "\r\n");
+			w.put("v ");
+			w.putFixed(v.GetX());
+			w.put(' ');
+			w.putFixed(v.GetY());
+			w.put(' ');
+			w.putFixed(v.GetZ());
+			w.put("\r\n");
 		}
-		Output(m_pFile, "# end vertex positions (" + to_string(VP.GetCount() / 3) + ")\r\n");
+		w.put("# end vertex positions (");
+		w.putLong(VP.GetCount() / 3);
+		w.put(")\r\n");
 
 		array<float, 3> triple;
 
@@ -150,7 +168,7 @@ CStatus COBJ::ExportToFile(CRefArray& inObjects, string initFilePathName, bool b
 
 				char hex[] = "0123456789abcdef";
 
-				Output(m_pFile, "\r\n# The following MRGB block contains ZBrush Vertex Color (Polypaint) and masking output as 4 hexadecimal values per vertex. The vertex color format is MMRRGGBB with up to 64 entries per MRGB line.\r\n");
+				w.put("\r\n# The following MRGB block contains ZBrush Vertex Color (Polypaint) and masking output as 4 hexadecimal values per vertex. The vertex color format is MMRRGGBB with up to 64 entries per MRGB line.\r\n");
 
 				CFloatArray FA_RGB_perPoint;
 				CLongArray LA_RGBCounts_perPoint;
@@ -199,7 +217,7 @@ CStatus COBJ::ExportToFile(CRefArray& inObjects, string initFilePathName, bool b
 					else
 						strLine += "ff";
 
-					if (bRGBValid) {
+					if (bRGBValid && LA_RGBCounts_perPoint[i] > 0) {
 						int r = (int)(255.0 * (FA_RGB_perPoint[3 * i] / LA_RGBCounts_perPoint[i]));
 						strLine += hex[(r >> 4) & 0xf];
 						strLine += hex[r & 0xf];
@@ -214,25 +232,30 @@ CStatus COBJ::ExportToFile(CRefArray& inObjects, string initFilePathName, bool b
 						strLine += "ffffff";
 
 					if (nColors++ == 63) {
-						Output(m_pFile, strLine + "\r\n");
+						w.put(strLine);
+						w.put("\r\n");
 						strLine = "#MRGB ";
 						nColors = 0;
 					}
 				}
 
-				if (nColors != 0)
-					Output(m_pFile, strLine + "\r\n");
+				if (nColors != 0) {
+					w.put(strLine);
+					w.put("\r\n");
+				}
 
-				Output(m_pFile, "# End of MRGB block \r\n");
+				w.put("# End of MRGB block \r\n");
 			}
 		}
 
 		// ************************
 		// * Export UVs
+		// the file index of every node's uv is kept in a table, so the polygon loop below needs no lookups
 
 		ClusterProperty UVCP(ga.GetUVs()[0]);
 		CFloatArray FA_UVs;
 		CBitArray flags_UVs;
+		vector<long> uvIxOfNode;
 		m_hashmap_uv.clear();
 
 		bool bExportUVs = UVCP.IsValid();
@@ -242,24 +265,38 @@ CStatus COBJ::ExportToFile(CRefArray& inObjects, string initFilePathName, bool b
 
 			m_progress.PutCaption("Exporting OBJ (Texture Positions of '" + xobj.GetName() + "')");
 
-			Output(m_pFile, "\r\n# texture positions\r\n");
+			w.put("\r\n# texture positions\r\n");
+
+			long nbNodes = FA_UVs.GetCount() / 3;
+			uvIxOfNode.resize(nbNodes);
+			m_hashmap_uv.reserve(nbNodes);
 
 			long ix = 0;
-			for (long iUVCoord = 0, l_max = FA_UVs.GetCount() / 3; iUVCoord < l_max; iUVCoord++) {
+			for (long iNode = 0; iNode < nbNodes; iNode++) {
 
-				float u = FA_UVs[3 * iUVCoord + 0];
-				float v = FA_UVs[3 * iUVCoord + 1];
-				float w = FA_UVs[3 * iUVCoord + 2];
-				triple = { u, v, w };
-				if (m_hashmap_uv.count(triple) == 0) {
-
-					m_hashmap_uv.insert({ triple, ix++ });
-					//Output(m_file, "vt " + to_string(u) + " " + to_string(v) + " " + to_string(w) + "\r\n");
-					Output(m_pFile, "vt " + to_string(u) + " " + to_string(v) + "\r\n");
+				float u = FA_UVs[3 * iNode + 0];
+				float v = FA_UVs[3 * iNode + 1];
+				float w3 = FA_UVs[3 * iNode + 2];
+				triple = { u, v, w3 };
+				auto found = m_hashmap_uv.find(triple);
+				if (found == m_hashmap_uv.end()) {
+					m_hashmap_uv.insert({ triple, ix });
+					uvIxOfNode[iNode] = ix++;
+					w.put("vt ");
+					w.putFixed(u);
+					w.put(' ');
+					w.putFixed(v);
+					w.put("\r\n");
 				}
+				else
+					uvIxOfNode[iNode] = found->second;
 			}
 
-			Output(m_pFile, "# end texture positions (" + to_string(m_hashmap_uv.size()) + ", down from " + to_string(FA_UVs.GetCount() / 3) + " with duplicates)\r\n");
+			w.put("# end texture positions (");
+			w.putLong((long long)m_hashmap_uv.size());
+			w.put(", down from ");
+			w.putLong(nbNodes);
+			w.put(" with duplicates)\r\n");
 		}
 
 		// ************************
@@ -267,7 +304,7 @@ CStatus COBJ::ExportToFile(CRefArray& inObjects, string initFilePathName, bool b
 
 		ClusterProperty UNCP(ga.GetUserNormals()[0]);
 		CFloatArray FA_UserNormals;
-		CBitArray flags_UserNormals;
+		vector<long> normalIxOfNode;
 		m_hashmap_normals.clear();
 
 		bool bExportUserNormals = UNCP.IsValid();
@@ -277,33 +314,70 @@ CStatus COBJ::ExportToFile(CRefArray& inObjects, string initFilePathName, bool b
 
 			m_progress.PutCaption("Exporting OBJ (Normals of '" + xobj.GetName() + "')");
 
-			Output(m_pFile, "\r\n# normals\r\n");
+			w.put("\r\n# normals\r\n");
+
+			long nbNodes = FA_UserNormals.GetCount() / 3;
+			normalIxOfNode.resize(nbNodes);
+			m_hashmap_normals.reserve(nbNodes);
 
 			long ix = 0;
-			for (long iUserNormal = 0, l_max = FA_UserNormals.GetCount() / 3; iUserNormal < l_max; iUserNormal++) {
-				float nx = FA_UserNormals[3 * iUserNormal + 0];
-				float ny = FA_UserNormals[3 * iUserNormal + 1];
-				float nz = FA_UserNormals[3 * iUserNormal + 2];
+			for (long iNode = 0; iNode < nbNodes; iNode++) {
+				float nx = FA_UserNormals[3 * iNode + 0];
+				float ny = FA_UserNormals[3 * iNode + 1];
+				float nz = FA_UserNormals[3 * iNode + 2];
 				triple = { nx, ny, nz };
-				if (m_hashmap_normals.count(triple) == 0) {
-
-					m_hashmap_normals.insert({ triple, ix++ });
-					Output(m_pFile, string("vn ") + to_string(nx) + " " + to_string(ny) + " " + to_string(nz) + "\r\n");
+				auto found = m_hashmap_normals.find(triple);
+				if (found == m_hashmap_normals.end()) {
+					m_hashmap_normals.insert({ triple, ix });
+					normalIxOfNode[iNode] = ix++;
+					w.put("vn ");
+					w.putFixed(nx);
+					w.put(' ');
+					w.putFixed(ny);
+					w.put(' ');
+					w.putFixed(nz);
+					w.put("\r\n");
 				}
+				else
+					normalIxOfNode[iNode] = found->second;
 			}
 
-			Output(m_pFile, string("# end normals (") + to_string(m_hashmap_normals.size()) + ", down from " + to_string(FA_UserNormals.GetCount() / 3) + " with duplicates)\r\n");
+			w.put("# end normals (");
+			w.putLong((long long)m_hashmap_normals.size());
+			w.put(", down from ");
+			w.putLong(nbNodes);
+			w.put(" with duplicates)\r\n");
 		}
 
 		CRefArray Materials = ga.GetMaterials();
 
-		Output(m_pFile, string("\r\n# ") + to_string(LA_Counts.GetCount()) + " polygons using " + to_string(Materials.GetCount()) + " Material(s)\r\n");
+		w.put("\r\n# ");
+		w.putLong(LA_Counts.GetCount());
+		w.put(" polygons using ");
+		w.putLong(Materials.GetCount());
+		w.put(" Material(s)\r\n");
 
 		// ************************
 		// * Export Polygons
 
 		m_progress.PutCaption("Exporting OBJ (Polygons of '" + xobj.GetName() + "')");
 		m_progress.Increment();
+
+		// polygons bucketed by material once (instead of scanning all polygons for every material)
+		long nbPolygons = LA_Counts.GetCount();
+		long nbMaterials = Materials.GetCount();
+		vector<long> polyStart(nbPolygons + 1);
+		polyStart[0] = 0;
+		for (long iPoly = 0; iPoly < nbPolygons; iPoly++)
+			polyStart[iPoly + 1] = polyStart[iPoly] + LA_Counts[iPoly];
+
+		vector<vector<long> > polysOfMaterial(nbMaterials > 0 ? nbMaterials : 1);
+		for (long iPoly = 0; iPoly < nbPolygons; iPoly++) {
+			long iMaterial = LA_Materials[iPoly];
+			if (iMaterial < 0 || iMaterial >= nbMaterials)
+				iMaterial = 0;
+			polysOfMaterial[iMaterial].push_back(iPoly);
+		}
 
 		// loop materials
 		for (long iMaterial = 0, i_max = Materials.GetCount(); iMaterial < i_max; iMaterial++) {
@@ -317,8 +391,9 @@ CStatus COBJ::ExportToFile(CRefArray& inObjects, string initFilePathName, bool b
 				materialName = "default";
 
 			// if(bWriteMTLFile) - commented out because usemtl might be used for other purposes
-			Output(m_pFile, string("usemtl ") + string(materialName.GetAsciiString()) + "\r\n");
-
+			w.put("usemtl ");
+			w.put(materialName.GetAsciiString());
+			w.put("\r\n");
 
 			CValue rVal;
 			CValueArray args;
@@ -332,62 +407,51 @@ CStatus COBJ::ExportToFile(CRefArray& inObjects, string initFilePathName, bool b
 			if (bWriteMTLFile)
 				Output(m_matfile, (L"newmtl " + materialName + L"\r\n" + strMaterial + L"\r\n").GetAsciiString());
 
-			long ix = 0;
+			const vector<long>& polys = polysOfMaterial[iMaterial];
+			for (size_t iInBucket = 0; iInBucket < polys.size(); iInBucket++) {
 
-			// loop counts for each polygons / material for each polygon
-			for (long iPolycount = 0, j_max = LA_Counts.GetCount(); iPolycount < j_max; iPolycount++) {
+				long iPoly = polys[iInBucket];
+				long ix = polyStart[iPoly];
+				long polyVertexCount = LA_Counts[iPoly];
 
-				long polyVertexCount = LA_Counts[iPolycount];
+				w.put("f ");
 
-				if (LA_Materials[iPolycount] == iMaterial) {
+				// loop single polygon
+				for (long iPolyVertexcount = 0; iPolyVertexcount < polyVertexCount; iPolyVertexcount++) {
 
-					string strTmp = "f ";
+					long iNode = LA_Nodes[ix + iPolyVertexcount];
 
-					// loop single polygon
-					for (long iPolyVertexcount = 0, k_max = polyVertexCount; iPolyVertexcount < k_max; iPolyVertexcount++) {
+					// vertex index
+					w.putLong(LA_Indices[ix + iPolyVertexcount] + 1 + (long long)m_vertices_base_ix_group);
 
-						// vertex index
-						strTmp.append(to_string(LA_Indices[ix + iPolyVertexcount] + 1 + m_vertices_base_ix_group));
+					w.put('/');
+					if (bExportUVs)
+						w.putLong(uvIxOfNode[iNode] + 1 + (long long)m_uvs_base_ix_group);
 
-						if (bExportUVs) {
-							float u = FA_UVs[3 * LA_Nodes[ix + iPolyVertexcount] + 0];
-							float v = FA_UVs[3 * LA_Nodes[ix + iPolyVertexcount] + 1];
-							float w = FA_UVs[3 * LA_Nodes[ix + iPolyVertexcount] + 2];
-							triple = { u, v, w };
-							strTmp.append("/" + to_string(m_hashmap_uv[triple] + 1 + m_uvs_base_ix_group));
-						}
-						else
-							strTmp += "/";
+					if (bExportUserNormals) {
+						w.put('/');
+						w.putLong(normalIxOfNode[iNode] + 1 + (long long)m_normals_base_ix_group);
+					}
 
-						if (bExportUserNormals) {
-							float nx = FA_UserNormals[3 * LA_Nodes[ix + iPolyVertexcount] + 0];
-							float ny = FA_UserNormals[3 * LA_Nodes[ix + iPolyVertexcount] + 1];
-							float nz = FA_UserNormals[3 * LA_Nodes[ix + iPolyVertexcount] + 2];
-							triple = { nx, ny, nz };
-							strTmp.append("/" + to_string(m_hashmap_normals[triple] + 1 + m_normals_base_ix_group));
-						}
+					w.put(' ');
+				} // for each polygon point
 
-						strTmp += " ";
-					} // for each polygon point
-
-					strTmp += "\r\n";
-
-					Output(m_pFile, strTmp);
-				}
-
-				ix += polyVertexCount;
-			} // for each polygon
-		} // for each material4
+				w.put("\r\n");
+			} // for each polygon of the material
+		} // for each material
 
 		m_vertices_base_ix_group += VP.GetCount() / 3;
 		m_uvs_base_ix_group += m_hashmap_uv.size();
 		m_normals_base_ix_group += m_hashmap_normals.size();
 	}
 
+	w.flush();
 	fclose(m_pFile);
 
 	if (bWriteMTLFile)
 		fclose(m_matfile);
+
+	m_progress.PutVisible(false);
 
 	if (fails != 0)
 		app.LogMessage("OBJ file export successful but " + CString(fails) + " objects failed (nulls or other items were selected).", siWarningMsg);

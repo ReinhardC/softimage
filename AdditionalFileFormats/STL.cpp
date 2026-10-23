@@ -1,4 +1,39 @@
 #include "stl.h"
+#include "FastIO.h"
+
+// ASCII STL: the whole file is scanned in memory for "vertex x y z" lines, 3 of them make a facet
+class CAsciiStlCursor {
+public:
+	CAsciiStlCursor(const char* begin, const char* end) : m_p(begin), m_end(end) {}
+
+	// reads the next facet's 3 corners into tri.v[1..3]; false when the file has no complete facet left
+	bool nextFacet(StlTri& tri)
+	{
+		int ix = 0;
+		while (ix < 3 && m_p < m_end) {
+			// start of a line: skip blanks
+			while (m_p < m_end && (*m_p == ' ' || *m_p == '\t' || *m_p == '\r'))
+				m_p++;
+			if (m_end - m_p >= 6 && memcmp(m_p, "vertex", 6) == 0) {
+				const char* q = m_p + 6;
+				for (int k = 0; k < 3; k++)
+					tri.v[ix + 1][k] = (float)fastio::parseDouble(q, &q);
+				ix++;
+				m_p = q;
+			}
+			// to the next line
+			while (m_p < m_end && *m_p != '\n')
+				m_p++;
+			if (m_p < m_end)
+				m_p++;
+		}
+		return ix == 3;
+	}
+
+private:
+	const char* m_p;
+	const char* m_end;
+};
 
 CStatus CSTL::Execute_Import(CRefArray& selectedObjects, string initFilePathName, bool bAutoScale)
 {
@@ -26,7 +61,6 @@ CStatus CSTL::Execute_Import(CRefArray& selectedObjects, string initFilePathName
 	vector<double> positions; // point positions to give to meshBuilder
 	vector<LONG> indices; // indices to give to meshBuilder
 	array<float, 3> triple; // this gets put in lookup
-	StlTri nextTriangle = {}; // data struct matching STL file data
 	ULONG numTris1 = 0, numTris2 = 0; // two ways to compute # of tris, to be sure
 	long ix = 0; // index counter
 
@@ -49,18 +83,36 @@ CStatus CSTL::Execute_Import(CRefArray& selectedObjects, string initFilePathName
 		fseek(m_pFile, 84L, SEEK_SET); // skip header
 
 		m_progress.PutMaximum(numTris1);
+		hashmap_positions.reserve(numTris1); // a closed mesh has about half as many points as triangles
 	}
 
-	// read until no complete triangle can be read anymore (feof() only becomes true after a failed read,
-	// so testing it before reading would process the last triangle twice or, for ASCII files without a
-	// trailing newline, drop the last triangle)
+	// ASCII files are read into memory as a whole (fgets + sscanf per line was the bottleneck)
+	vector<char> asciiData;
+	if (!bBinary) {
+		asciiData.resize((size_t)fileSize + 1);
+		size_t got = fread(&asciiData[0], 1, (size_t)fileSize, m_pFile);
+		asciiData[got] = '\0';
+		asciiData.resize(got + 1);
+	}
+	CAsciiStlCursor ascii(asciiData.empty() ? NULL : &asciiData[0], asciiData.empty() ? NULL : &asciiData[0] + asciiData.size() - 1);
+
+	// binary files are read in blocks of records (one fread per triangle was the bottleneck)
+	vector<StlTri> block(bBinary ? 8192 : 0);
+	size_t nbInBlock = 0, iInBlock = 0;
+
+	StlTri nextTriangle = {}; // data struct matching STL file data
 	for (;;)
 	{
 		if (bBinary) {
-			if (fread(&nextTriangle, 50, 1, m_pFile) != 1)
-				break;
+			if (iInBlock == nbInBlock) {
+				nbInBlock = fread(&block[0], sizeof(StlTri), block.size(), m_pFile);
+				iInBlock = 0;
+				if (nbInBlock == 0)
+					break;
+			}
+			nextTriangle = block[iInBlock++];
 		}
-		else if (!parseAsciiFacet(nextTriangle, m_pFile))
+		else if (!ascii.nextFacet(nextTriangle))
 			break;
 
 		// starting at index 1 because index 0 is normal vector which is ignored
@@ -74,16 +126,17 @@ CStatus CSTL::Execute_Import(CRefArray& selectedObjects, string initFilePathName
 			if (triple[0] < lfMinExtentX) // for auto scale
 				lfMinExtentX = triple[0];
 
-			// hashmap lookup - could use positions array too but this is faster
-			if (hashmap_positions.count(triple) == 0) {
-				positions.push_back(triple[0]); // new position, but in both positions and lookup hashmap
+			// hashmap lookup - new positions are appended, existing ones reuse their index
+			auto found = hashmap_positions.find(triple);
+			if (found == hashmap_positions.end()) {
+				positions.push_back(triple[0]);
 				positions.push_back(triple[1]);
 				positions.push_back(triple[2]);
-				hashmap_positions.insert({ triple, ix++ });
+				hashmap_positions.insert({ triple, ix });
+				indices.push_back(ix++);
 			}
-
-			// get new OR existing index
-			indices.push_back(hashmap_positions[triple]);
+			else
+				indices.push_back(found->second);
 		}
 
 		numTris2++;
@@ -94,11 +147,11 @@ CStatus CSTL::Execute_Import(CRefArray& selectedObjects, string initFilePathName
 				m_progress.PutVisible(false);
 				return CStatus::False;
 			}
-
 		}
 	}
 
 	fclose(m_pFile);
+	vector<char>().swap(asciiData);
 
 	lfExtentX = lfMaxExtentX - lfMinExtentX; // for auto scale
 	MATH::CVector3 vAutoScaling(1.0, 1.0, 1.0);
@@ -176,6 +229,9 @@ CStatus CSTL::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 		return CStatus::Fail;
 	}
 
+	// ASCII text goes through a 1 MB buffer with in-place number formatting
+	fastio::CTextWriter w(m_pFile);
+
 	string description("Original Name: " + m_fileName);
 	if (bExportBinary)
 	{
@@ -187,8 +243,11 @@ CStatus CSTL::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 
 		fwrite(header, 1, 80, m_pFile);
 	}
-	else
-		Output(m_pFile, "solid " + m_fileName + "\n\n");
+	else {
+		w.put("solid ");
+		w.put(m_fileName);
+		w.put("\n\n");
+	}
 
 	long fails = 0;
 
@@ -197,6 +256,10 @@ CStatus CSTL::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 		fwrite(&dummy, sizeof(ULONG), 1, m_pFile);
 
 	ULONG totaltris = 0;
+
+	// binary records are collected and written in blocks (one fwrite per triangle was the bottleneck)
+	vector<StlTri> block;
+	block.reserve(8192);
 
 	for (long iObject = 0, iObject_max = inObjects.GetCount(); iObject < iObject_max; iObject++) {
 		X3DObject xobj(inObjects[iObject]);
@@ -247,21 +310,35 @@ CStatus CSTL::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 
 			computeFacetNormal(nextTriangle);
 
-			if (bExportBinary)
-				fwrite(&nextTriangle, 50, 1, m_pFile);
+			if (bExportBinary) {
+				block.push_back(nextTriangle);
+				if (block.size() == block.capacity()) {
+					fwrite(&block[0], sizeof(StlTri), block.size(), m_pFile);
+					block.clear();
+				}
+			}
 			else {
 				// same coordinates as the binary format so both formats round-trip through the importer
-				Output(m_pFile, string("facet normal ") + to_string(nextTriangle.v[0][0]) + " " + to_string(nextTriangle.v[0][1]) + " " + to_string(nextTriangle.v[0][2]) + "\n\touter loop\n");
-				Output(m_pFile, string("\t\tvertex ") + to_string(nextTriangle.v[1][0]) + " " + to_string(nextTriangle.v[1][1]) + " " + to_string(nextTriangle.v[1][2]) + "\n");
-				Output(m_pFile, string("\t\tvertex ") + to_string(nextTriangle.v[2][0]) + " " + to_string(nextTriangle.v[2][1]) + " " + to_string(nextTriangle.v[2][2]) + "\n");
-				Output(m_pFile, string("\t\tvertex ") + to_string(nextTriangle.v[3][0]) + " " + to_string(nextTriangle.v[3][1]) + " " + to_string(nextTriangle.v[3][2]) + "\n");
-				Output(m_pFile, "\tendloop\nendfacet\n");
+				w.put("facet normal ");
+				w.putFixed(nextTriangle.v[0][0]); w.put(' ');
+				w.putFixed(nextTriangle.v[0][1]); w.put(' ');
+				w.putFixed(nextTriangle.v[0][2]);
+				w.put("\n\touter loop\n");
+				for (int iCorner = 1; iCorner <= 3; iCorner++) {
+					w.put("\t\tvertex ");
+					w.putFixed(nextTriangle.v[iCorner][0]); w.put(' ');
+					w.putFixed(nextTriangle.v[iCorner][1]); w.put(' ');
+					w.putFixed(nextTriangle.v[iCorner][2]);
+					w.put('\n');
+				}
+				w.put("\tendloop\nendfacet\n");
 			}
 
 			numTris2++;
 			if (numTris2 % 100000 == 0) { // increment progress bar
 				m_progress.Increment(100000);
 				if (m_progress.IsCancelPressed()) {
+					w.flush();
 					fclose(m_pFile);
 					m_progress.PutVisible(false);
 					return CStatus::False;
@@ -270,12 +347,17 @@ CStatus CSTL::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 		}
 	}
 
-	if (!bExportBinary)
-		Output(m_pFile, "endsolid " + m_fileName + "\n\n");
-
 	if (bExportBinary) {
+		if (!block.empty())
+			fwrite(&block[0], sizeof(StlTri), block.size(), m_pFile);
 		fseek(m_pFile, 80, SEEK_SET);
 		fwrite(&totaltris, sizeof(ULONG), 1, m_pFile);
+	}
+	else {
+		w.put("endsolid ");
+		w.put(m_fileName);
+		w.put("\n\n");
+		w.flush();
 	}
 
 	m_progress.PutVisible(false);
@@ -288,7 +370,7 @@ CStatus CSTL::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 	return CStatus::OK;
 }
 
-// parser for ASCII STL format: reads the next 3 "vertex x y z" lines; returns false if the file ends first
+// kept for the header declaration; the importer no longer parses line by line
 bool CSTL::parseAsciiFacet(StlTri& nextTriangle, FILE* file)
 {
 	char buf[256];

@@ -35,10 +35,14 @@
 using namespace XSI;
 using namespace std;
 
+// one binary STL record: normal, 3 corners, attribute count = 50 bytes, packed so that whole
+// arrays of records can be read and written in one call
+#pragma pack(push, 1)
 typedef struct _StlTri {
 	float v[4][3];
 	unsigned short attrCount;
 } StlTri;
+#pragma pack(pop)
 
 class CSTL : public CFileFormat {
 

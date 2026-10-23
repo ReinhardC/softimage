@@ -142,6 +142,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="f3hash.h" />
+    <ClInclude Include="FastIO.h" />
     <ClInclude Include="FileFormat.h" />
     <ClInclude Include="ObjPreferences.h" />
     <ClInclude Include="OBJ.h" />
