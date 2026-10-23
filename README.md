@@ -2,12 +2,14 @@
 
 please report any issues!
  
-github repository so far has only 1 project in it:
+github repository has 2 projects in it:
 
-* *"Additional File Formats"*
+* *"Additional File Formats"* (below)
   this project was started because of factory OBJ export performance issues with large meshes
+* *"XsiMcp"*: an MCP endpoint in Softimage, so an AI assistant such as Claude Code can
+  run Python in Softimage and capture its window and viewports; see [XsiMcp/README.md](XsiMcp/README.md)
 
-features
+Additional File Formats features
 -------------------------
 * STL export 
 * STL import

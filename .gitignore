@@ -291,3 +291,7 @@ __pycache__/
 *.xsd.cs
 /Scratchpad
 /AdditionalFileFormats/OBJ.txt
+
+# XsiMcp: per-installation token and log
+Workgroup/Addons/XsiMcp/Application/xsi_mcp/connection.json
+Workgroup/Addons/XsiMcp/Application/xsi_mcp/plugin.log
