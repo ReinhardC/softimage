@@ -36,25 +36,49 @@
 using namespace XSI;
 using namespace std;
 
-typedef struct _elementinfo {
+// one "property" line of the PLY header
+struct plyprop {
 	string name;
-	long size, count;	
-	vector<string> types;
-	vector<string> list_element_type;
-	vector<string> names;
-} elementinfo;
+	string type;      // scalar type, or the entry type of a list property
+	string countType; // list properties only: type of the entry count
+	bool isList;
+};
+
+// one "element" line of the PLY header together with its properties
+struct elementinfo {
+	string name;
+	long count;
+	vector<plyprop> props;
+};
 
 class CPLY : public CFileFormat {
 
 	FILE* m_pFile;
 
-	bool read_header(FILE* file, vector<elementinfo*>&, bool&);
-	void Output(FILE* file, string str);
+	bool m_bBinary, m_bBigEndian;
+	vector<string> m_tokens; // ASCII format: tokens of the data line being read
+	size_t m_tokIx;          // ASCII format: next token to consume
+
+	// everything read from the file before the mesh is built
+	struct PlyData {
+		vector<double> positions;    // x y z per vertex
+		vector<float> rgb;           // r g b per vertex (0..1), empty if the file has no vertex colors
+		vector<long> counts;         // points per polygon
+		vector<long> indices;        // point indices of all polygons
+		vector<float> rgbaPerSample; // vertex colors per polygon corner
+		vector<float> uvwPerSample;  // u v w per polygon corner
+		vector<float> multiTexUVs;   // u v per multi_texture_vertex of texture 0
+		double minX, maxX;           // for auto scale
+	};
+
+	bool read_header(vector<elementinfo>& out_elinfo);
+	bool readScalar(const string& type, double& out);
+	bool readElement(const elementinfo& el, vector<double>& scalars, vector<vector<double> >& lists);
+	CStatus readBody(const vector<elementinfo>& header, PlyData& data);
 
 public:
 	string getFormatName() { return "PLY"; }
 
 	CStatus Execute_Import(string initFilePathName, bool, bool, bool, bool);
 	//CStatus Execute_Export(CRefArray& inObjects, string initFilePathName, bool bExportPolypaint, bool bSeparateFiles, bool bExportLocalCoords, bool bBinary);
-
 };

@@ -52,6 +52,6 @@ public:
 
 private:
 
-	void parseAsciiFacet(StlTri& nextTriangle, FILE* file);
+	bool parseAsciiFacet(StlTri& nextTriangle, FILE* file);
 	void Output(FILE* file, string str);
 };

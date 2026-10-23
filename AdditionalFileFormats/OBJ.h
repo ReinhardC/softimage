@@ -60,7 +60,6 @@ public:
 
 	bool bIsDefaultMesh = true; // has not been initialized by an "o" tag yet
 
-	long ixPolygon = 0;
 	vector<long> PolygonPointCounts;
 	vector<double> PointPositions;
 	vector<long> PointIndices;
@@ -98,7 +97,7 @@ class COBJ : public CFileFormat
 public:	
 	ObjPreferences Prefs;
 
-	unordered_map<tr1::array<float, 3>, int, f3hash> m_hashmap_uv, m_hashmap_normals;
+	unordered_map<array<float, 3>, int, f3hash> m_hashmap_uv, m_hashmap_normals;
 	size_t m_vertices_base_ix_group = 0, m_uvs_base_ix_group = 0, m_normals_base_ix_group = 0;
 
 	void Output(FILE* file, string str);

@@ -14,16 +14,19 @@ CStatus CSTL::Execute_Import(CRefArray& selectedObjects, string initFilePathName
 	double lfExtentX, lfMaxExtentX = -DBL_MAX, lfMinExtentX = DBL_MAX;
 
 	fopen_s(&m_pFile, m_filePathName.c_str(), "rb");
-	if (m_pFile == NULL)
+	if (m_pFile == NULL) {
+		app.LogMessage("Could not open '" + CString(m_filePathName.c_str()) + "'.", siErrorMsg);
+		m_progress.PutVisible(false);
 		return CStatus::Fail;
+	}
 
 	// lookup for finding connected polygon points (STL gives no info about polygon connectivity except overlapping position)
-	unordered_map<tr1::array<float, 3>, int, f3hash> hashmap_positions;
+	unordered_map<array<float, 3>, int, f3hash> hashmap_positions;
 
 	vector<double> positions; // point positions to give to meshBuilder
 	vector<LONG> indices; // indices to give to meshBuilder
-	tr1::array<float, 3> triple; // this gets put in lookup
-	StlTri nextTriangle; // data struct matching STL file data
+	array<float, 3> triple; // this gets put in lookup
+	StlTri nextTriangle = {}; // data struct matching STL file data
 	ULONG numTris1 = 0, numTris2 = 0; // two ways to compute # of tris, to be sure
 	long ix = 0; // index counter
 
@@ -48,12 +51,17 @@ CStatus CSTL::Execute_Import(CRefArray& selectedObjects, string initFilePathName
 		m_progress.PutMaximum(numTris1);
 	}
 
-	while (!feof(m_pFile))
+	// read until no complete triangle can be read anymore (feof() only becomes true after a failed read,
+	// so testing it before reading would process the last triangle twice or, for ASCII files without a
+	// trailing newline, drop the last triangle)
+	for (;;)
 	{
-		if (bBinary)
-			fread(&nextTriangle, 50, 1, m_pFile);
-		else
-			parseAsciiFacet(nextTriangle, m_pFile);
+		if (bBinary) {
+			if (fread(&nextTriangle, 50, 1, m_pFile) != 1)
+				break;
+		}
+		else if (!parseAsciiFacet(nextTriangle, m_pFile))
+			break;
 
 		// starting at index 1 because index 0 is normal vector which is ignored
 		for (auto i = 1; i < 4; i++) {
@@ -74,7 +82,7 @@ CStatus CSTL::Execute_Import(CRefArray& selectedObjects, string initFilePathName
 				hashmap_positions.insert({ triple, ix++ });
 			}
 
-			// get new OR existing index 
+			// get new OR existing index
 			indices.push_back(hashmap_positions[triple]);
 		}
 
@@ -83,13 +91,14 @@ CStatus CSTL::Execute_Import(CRefArray& selectedObjects, string initFilePathName
 			m_progress.Increment(100000);
 			if (m_progress.IsCancelPressed()) {
 				fclose(m_pFile);
+				m_progress.PutVisible(false);
 				return CStatus::False;
 			}
 
 		}
 	}
 
-	numTris2--;
+	fclose(m_pFile);
 
 	lfExtentX = lfMaxExtentX - lfMinExtentX; // for auto scale
 	MATH::CVector3 vAutoScaling(1.0, 1.0, 1.0);
@@ -99,13 +108,19 @@ CStatus CSTL::Execute_Import(CRefArray& selectedObjects, string initFilePathName
 		vAutoScaling.Set(0.01, 0.01, 0.01);
 
 	if (bBinary && (numTris1 != numTris2)) {
-		app.LogMessage(L"File has different number of triangles than specified in header (specified=" + CString(numTris1) + L", found=" + CString(numTris2) + L")");
-		fclose(m_pFile);
+		app.LogMessage(L"File has different number of triangles than specified in header (specified=" + CString(numTris1) + L", found=" + CString(numTris2) + L")", siErrorMsg);
+		m_progress.PutVisible(false);
+		return CStatus::Fail;
+	}
+
+	if (numTris2 == 0) {
+		app.LogMessage(L"No triangles found in '" + CString(m_filePathName.c_str()) + L"'.", siErrorMsg);
+		m_progress.PutVisible(false);
 		return CStatus::Fail;
 	}
 
 	m_progress.PutCaption("Building Mesh");
-	
+
 	Primitive prim;
 	if (selectedObjects.GetCount() != 0) {
 		X3DObject xobj(selectedObjects[0]);
@@ -124,7 +139,8 @@ CStatus CSTL::Execute_Import(CRefArray& selectedObjects, string initFilePathName
 
 	PolygonMesh mesh = prim.GetGeometry();
 	if (!mesh.IsValid()) {
-		fclose(m_pFile);
+		app.LogMessage(L"The selected object is not a polygon mesh.", siErrorMsg);
+		m_progress.PutVisible(false);
 		return CStatus::False;
 	}
 
@@ -140,9 +156,19 @@ CStatus CSTL::Execute_Import(CRefArray& selectedObjects, string initFilePathName
 
 	m_progress.PutVisible(false);
 
-	fclose(m_pFile);
-
 	return err;
+}
+
+// computes the (unit) facet normal from the 3 corners stored in tri.v[1..3] into tri.v[0]
+static void computeFacetNormal(StlTri& tri)
+{
+	float ax = tri.v[2][0] - tri.v[1][0], ay = tri.v[2][1] - tri.v[1][1], az = tri.v[2][2] - tri.v[1][2];
+	float bx = tri.v[3][0] - tri.v[1][0], by = tri.v[3][1] - tri.v[1][1], bz = tri.v[3][2] - tri.v[1][2];
+	float nx = ay * bz - az * by, ny = az * bx - ax * bz, nz = ax * by - ay * bx;
+	float len = sqrtf(nx * nx + ny * ny + nz * nz);
+	if (len > 0.0f) { nx /= len; ny /= len; nz /= len; }
+	else { nx = ny = nz = 0.0f; }
+	tri.v[0][0] = nx; tri.v[0][1] = ny; tri.v[0][2] = nz;
 }
 
 CStatus CSTL::Execute_Export(CRefArray& inObjects, string initFilePathName, bool bExportBinary, bool bExportLocalCoords)
@@ -151,9 +177,10 @@ CStatus CSTL::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 
 	initStrings(initFilePathName);
 
-	if ((m_pFile = fopen(m_filePathName.c_str(), "wb")) == NULL)
+	if ((m_pFile = fopen(m_filePathName.c_str(), "wb")) == NULL) {
+		app.LogMessage("Could not create '" + CString(m_filePathName.c_str()) + "'.", siErrorMsg);
 		return CStatus::Fail;
-
+	}
 
 	string description("Original Name: " + m_fileName);
 	if (bExportBinary)
@@ -162,7 +189,7 @@ CStatus CSTL::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 		for (int i = 0; i < 80; i++)
 			header[i] = '\0';
 
-		strcpy(header, description.c_str());
+		strncpy(header, description.c_str(), sizeof(header) - 1);
 
 		fwrite(header, 1, 80, m_pFile);
 	}
@@ -180,126 +207,112 @@ CStatus CSTL::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 	for (long iObject = 0, iObject_max = inObjects.GetCount(); iObject < iObject_max; iObject++) {
 		X3DObject xobj(inObjects[iObject]);
 
-		// Get a geometry accessor from the selected object	
+		// Get a geometry accessor from the selected object
 		Primitive prim = xobj.GetActivePrimitive();
 		PolygonMesh mesh = prim.GetGeometry();
-		if (!mesh.IsValid()) return CStatus::False;
+		if (!mesh.IsValid()) {
+			fails++;
+			continue;
+		}
 
 		CGeometryAccessor ga = mesh.GetGeometryAccessor(XSI::siConstructionModeSecondaryShape, XSI::siCatmullClark, 0);
 
 		CDoubleArray VP;
-		CLongArray LA_TriIndices, LA_TriNodeIndices;
-		CFloatArray FA_Normals;
+		CLongArray LA_TriIndices;
 
-		ga.GetNodeNormals(FA_Normals);
 		ga.GetTriangleVertexIndices(LA_TriIndices);
-		ga.GetTriangleNodeIndices(LA_TriNodeIndices);
 		ga.GetVertexPositions(VP);
-		
+
 		ULONG numTris1 = LA_TriIndices.GetCount() / 3, numTris2 = 0;
-		
+
 		totaltris += numTris1;
-		
+
 		m_progress.PutMaximum(numTris1);
 		m_progress.PutValue(0);
 		m_progress.PutVisible(true);
 		m_progress.PutCaption("Exporting STL Data (Object " + CString(iObject+1) + CString(" of ") + CString(iObject_max) + CString(")"));
 
-		StlTri nextTriangle;
+		StlTri nextTriangle = {}; // zero-initialized: normal and attribute count are written to the file too
 
 		MATH::CVector3 v;
 		MATH::CTransformation xfo = xobj.GetKinematics().GetGlobal().GetTransform();
 
 		for (long iVertexPosition = 0, i_max = LA_TriIndices.GetCount() / 3; iVertexPosition < i_max; iVertexPosition++)
 		{
-			v.Set(VP[3 * LA_TriIndices[3 * iVertexPosition]], VP[3 * LA_TriIndices[3 * iVertexPosition] + 1], VP[3 * LA_TriIndices[3 * iVertexPosition] + 2]);
-			if (!bExportLocalCoords)
-				v = MATH::MapObjectPositionToWorldSpace(xfo, v);
+			// Softimage is Y-up, STL files are conventionally Z-up: (x, y, z) -> (x, -z, y), inverse of the import
+			for (int iCorner = 0; iCorner < 3; iCorner++) {
+				long pointIx = LA_TriIndices[3 * iVertexPosition + iCorner];
+				v.Set(VP[3 * pointIx], VP[3 * pointIx + 1], VP[3 * pointIx + 2]);
+				if (!bExportLocalCoords)
+					v = MATH::MapObjectPositionToWorldSpace(xfo, v);
 
-			nextTriangle.v[1][0] = (float)v.GetX();
-			nextTriangle.v[1][1] = (float)-v.GetZ();
-			nextTriangle.v[1][2] = (float)v.GetY();
+				nextTriangle.v[iCorner + 1][0] = (float)v.GetX();
+				nextTriangle.v[iCorner + 1][1] = (float)-v.GetZ();
+				nextTriangle.v[iCorner + 1][2] = (float)v.GetY();
+			}
 
-			v.Set(VP[3 * LA_TriIndices[3 * iVertexPosition + 1]], VP[3 * LA_TriIndices[3 * iVertexPosition + 1] + 1], VP[3 * LA_TriIndices[3 * iVertexPosition + 1] + 2]);
-			if (!bExportLocalCoords)
-				v = MATH::MapObjectPositionToWorldSpace(xfo, v);
-
-			nextTriangle.v[2][0] = (float)v.GetX();
-			nextTriangle.v[2][1] = (float)-v.GetZ();
-			nextTriangle.v[2][2] = (float)v.GetY();
-
-			v.Set(VP[3 * LA_TriIndices[3 * iVertexPosition + 2]], VP[3 * LA_TriIndices[3 * iVertexPosition + 2] + 1], VP[3 * LA_TriIndices[3 * iVertexPosition + 2] + 2]);
-			if (!bExportLocalCoords)
-				v = MATH::MapObjectPositionToWorldSpace(xfo, v);
-
-			nextTriangle.v[3][0] = (float)v.GetX();
-			nextTriangle.v[3][1] = (float)-v.GetZ();
-			nextTriangle.v[3][2] = (float)v.GetY();
+			computeFacetNormal(nextTriangle);
 
 			if (bExportBinary)
 				fwrite(&nextTriangle, 50, 1, m_pFile);
 			else {
-				Output(m_pFile, "facet normal 0.0 0.0 0.0\n\touter loop\n");
-				Output(m_pFile, string("\t\tvertex ") + to_string(nextTriangle.v[1][0]) + " " + to_string(nextTriangle.v[1][2]) + " " + to_string(-nextTriangle.v[1][1]) + "\n");
-				Output(m_pFile, string("\t\tvertex ") + to_string(nextTriangle.v[2][0]) + " " + to_string(nextTriangle.v[2][2]) + " " + to_string(-nextTriangle.v[2][1]) + "\n");
-				Output(m_pFile, string("\t\tvertex ") + to_string(nextTriangle.v[3][0]) + " " + to_string(nextTriangle.v[3][2]) + " " + to_string(-nextTriangle.v[3][1]) + "\n");
-				Output(m_pFile, "\tendloop\nendfacet");
+				// same coordinates as the binary format so both formats round-trip through the importer
+				Output(m_pFile, string("facet normal ") + to_string(nextTriangle.v[0][0]) + " " + to_string(nextTriangle.v[0][1]) + " " + to_string(nextTriangle.v[0][2]) + "\n\touter loop\n");
+				Output(m_pFile, string("\t\tvertex ") + to_string(nextTriangle.v[1][0]) + " " + to_string(nextTriangle.v[1][1]) + " " + to_string(nextTriangle.v[1][2]) + "\n");
+				Output(m_pFile, string("\t\tvertex ") + to_string(nextTriangle.v[2][0]) + " " + to_string(nextTriangle.v[2][1]) + " " + to_string(nextTriangle.v[2][2]) + "\n");
+				Output(m_pFile, string("\t\tvertex ") + to_string(nextTriangle.v[3][0]) + " " + to_string(nextTriangle.v[3][1]) + " " + to_string(nextTriangle.v[3][2]) + "\n");
+				Output(m_pFile, "\tendloop\nendfacet\n");
 			}
 
 			numTris2++;
 			if (numTris2 % 100000 == 0) { // increment progress bar
 				m_progress.Increment(100000);
-				if (m_progress.IsCancelPressed())
+				if (m_progress.IsCancelPressed()) {
+					fclose(m_pFile);
+					m_progress.PutVisible(false);
 					return CStatus::False;
+				}
 			}
 		}
 	}
 
 	if (!bExportBinary)
 		Output(m_pFile, "endsolid " + m_fileName + "\n\n");
-	
-	fseek(m_pFile, 80, SEEK_SET);
 
-	if (bExportBinary)
+	if (bExportBinary) {
+		fseek(m_pFile, 80, SEEK_SET);
 		fwrite(&totaltris, sizeof(ULONG), 1, m_pFile);
+	}
 
 	m_progress.PutVisible(false);
 
 	fclose(m_pFile);
 
-	if (fails == 0)
-		return CStatus::OK;
-	else {
-		app.LogMessage(L"OBJ File output for " + CString(fails) + L" objects failed.", siErrorMsg);
-		return CStatus::Fail;
-	}
+	if (fails != 0)
+		app.LogMessage(L"STL file export successful but " + CString(fails) + L" objects were skipped (nulls or other non-mesh items were selected).", siWarningMsg);
 
+	return CStatus::OK;
 }
 
-// parser for ASCII STL format
-void CSTL::parseAsciiFacet(StlTri& nextTriangle, FILE* file)
+// parser for ASCII STL format: reads the next 3 "vertex x y z" lines; returns false if the file ends first
+bool CSTL::parseAsciiFacet(StlTri& nextTriangle, FILE* file)
 {
-	char buf[181];
-	buf[180] = '\0';
+	char buf[256];
 
-	auto ix = 0;
-	CString line;
-	do {
-		fgets(buf, 180, file);
-		line = buf;
-		if (line.FindString("vertex") == UINT_MAX)
-			continue;
+	int ix = 0;
+	while (ix < 3 && fgets(buf, sizeof(buf), file)) {
+		float x, y, z;
+		if (sscanf(buf, " vertex %f %f %f", &x, &y, &z) == 3) {
+			nextTriangle.v[ix + 1][0] = x;
+			nextTriangle.v[ix + 1][1] = y;
+			nextTriangle.v[ix + 1][2] = z;
+			ix++;
+		}
+	}
 
-		CStringArray tokens = line.Split(CString(L" "));
-		nextTriangle.v[ix + 1][0] = (float)atof(tokens[1].GetAsciiString());
-		nextTriangle.v[ix + 1][1] = (float)atof(tokens[2].GetAsciiString());
-		nextTriangle.v[ix + 1][2] = (float)atof(tokens[3].GetAsciiString());
-		ix++;
-
-	} while (!feof(file) && line.FindString("endfacet") == UINT_MAX);
-
+	return ix == 3;
 }
 
 void CSTL::Output(FILE* file, string str) {
-	fprintf_s(file, str.c_str());
+	fputs(str.c_str(), file); // not fprintf: the string may contain '%'
 }

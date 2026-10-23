@@ -82,7 +82,7 @@ CStatus COBJ::Execute_Export(CRefArray& inObjects, string initFilePathName, bool
 		}
 		Output(m_pFile, "# end vertex positions (" + to_string(VP.GetCount() / 3) + ")\r\n");
 
-		tr1::array<float, 3> triple;
+		array<float, 3> triple;
 
 		// ************************************************************************************************
 		// * Export Mask and Vertex Colors in ZBrush Polypaint format

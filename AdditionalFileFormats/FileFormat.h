@@ -97,7 +97,7 @@ protected:
 		return elems;
 	}
 
-	vector<char*> quickSplit(char* split_this, char delimiter)
+	vector<char*> quickSplit(char* split_this, char delimiter, bool keepEmpty = false)
 	{
 		int i = 0;
 		vector<char*> result;
@@ -105,7 +105,9 @@ protected:
 		while (split_this[i] != '\0') {
 			if (split_this[i] == delimiter) {
 				split_this[i] = '\0';
-				if (split_this[i + 1] != delimiter && split_this[i + 1] != '\r' && split_this[i + 1] != '\n' && split_this[i + 1] != '\0')
+				char next = split_this[i + 1];
+				// keepEmpty: "1//3" yields three fields ("1", "", "3"), needed for the OBJ face format
+				if (keepEmpty || (next != delimiter && next != '\r' && next != '\n' && next != '\0'))
 					result.push_back(split_this + i + 1);
 			}
 			else if (split_this[i] == '\n' || split_this[i] == '\r')
@@ -121,4 +123,4 @@ protected:
 	string m_fileName;
 
 	ProgressBar m_progress;
-};
+};
