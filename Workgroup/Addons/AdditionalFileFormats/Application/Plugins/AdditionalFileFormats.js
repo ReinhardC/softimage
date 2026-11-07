@@ -400,6 +400,10 @@ function FileFormatOptions_Define( in_ctxt )
 	oCustomProperty.AddParameter3("PLY_rememberLastUsedPath", siBool, 1, null,  null, false );
 	oCustomProperty.AddParameter3("PLY_AutoScale", siBool, 1, 0, 1, false );
 
+	//QuickAccess Library (see BuildQuickAccessLibrary.js)
+	oCustomProperty.AddParameter3("OBJLIB_showObjLib", siBool, 1, null,  null, false );
+	oCustomProperty.AddParameter3("OBJLIB_DefaultPath", siString );
+
 	return true;
 }
 
@@ -481,6 +485,15 @@ function FileFormatOptions_DefineLayout( in_ctxt )
 
 		oLayout.AddStaticText( "Import creates a new polygon mesh with vertex colors and UVs when the file has them. There is no PLY export." );
 		oItem = oLayout.AddItem( "PLY_AutoScale", "Auto Scale Large Meshes (0.1 / 0.01 when wider than 55 / 150 units)");
+
+	oLayout.EndGroup();
+
+	oLayout.AddTab ("QuickAccess Library");
+
+	oLayout.AddGroup ("Details");
+
+		oItem = oLayout.AddItem( "OBJLIB_showObjLib", "Show QuickAccess Library in Get->Primitive");
+		oItem = oLayout.AddItem( "OBJLIB_DefaultPath", "QuickAccess Library Path", siControlFolder );
 
 	oLayout.EndGroup();
 

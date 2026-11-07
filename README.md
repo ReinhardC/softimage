@@ -19,6 +19,7 @@ Additional File Formats features
 * import replaces the mesh of the selected object (keeps its transform and properties), or creates new objects when nothing is selected
 * large meshes are scaled down automatically on import (0.1 / 0.01 when wider than 55 / 150 units); switchable per format in the preferences
 * MTL materials are created for the renderer of the current pass (mental ray and Arnold are implemented, see `ParseShaderTree_*` and `ApplyShaderTree_*` in the JScript plugin to add another one)
+* QuickAccess Library: a Get > Primitive menu listing the OBJ, STL, FBX, MDL and EMDL files in `Data/ObjLib` of the user location and active workgroups, and in the folder set in the preferences; subfolders become submenus
 
 commands (for scripting)
 -------------------------
@@ -42,7 +43,7 @@ uninstallation instructions:
 * delete the custom preference preset file "C:\Users\\[your_username]\Autodesk\Softimage_2015_R2-SP2\Data\Preferences\File Format Options.Preset" 
 
 the preferences (File > Import/Export > File Format Options) hold the default and last used folders, the export options and the OBJ import options.
-When upgrading from a version before 4.7 delete the preset file named above once, so that the new options get their defaults.
+When upgrading from a version before 4.7, or when the QuickAccess Library tab is missing, delete the preset file named above once, so that the new options get their defaults.
 
 build instructions:
 -------------------------
@@ -50,7 +51,7 @@ build instructions:
 * open .sln file in Visual Studio 2019 or newer (the project uses the v142 toolset, pick another one in the project settings if needed)
 * set build configuration to x64 (release or debug)
 * build solution (the post-build step copies the DLL into the repository Workgroup folder)
-* to build the add-on package, run `AdditionalFileFormats/build_addon.py` in Softimage's Script Editor (Python): `execfile(r'<repository>\AdditionalFileFormats\build_addon.py')`; it writes `release/AdditionalFileFormats.xsiaddon` (ignored by git) from the DLL and the JScript plugin in `Workgroup`
+* to build the add-on package, run `AdditionalFileFormats/build_addon.py` in Softimage's Script Editor (Python): `execfile(r'<repository>\AdditionalFileFormats\build_addon.py')`; it writes `release/AdditionalFileFormats.xsiaddon` (ignored by git) from the DLL and the JScript plugins in `Workgroup`
 
 debug instructions:
 -------------------------

@@ -14,7 +14,8 @@ import tempfile
 # execfile sets no __file__; the code object knows which file it came from.
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(sys._getframe().f_code.co_filename)))
 SOURCE = os.path.join(REPO, 'Workgroup', 'Addons', 'AdditionalFileFormats')
-FILES = (r'Application\Plugins\AdditionalFileFormats.64.dll', r'Application\Plugins\AdditionalFileFormats.js')
+FILES = (r'Application\Plugins\AdditionalFileFormats.64.dll', r'Application\Plugins\AdditionalFileFormats.js',
+         r'Application\Plugins\BuildQuickAccessLibrary.js')
 OUT = os.path.join(REPO, 'release', 'AdditionalFileFormats.xsiaddon')
 METADATA = (('Title', 'Additional File Formats 4.7'), ('AuthorName', 'ReinhardC'),
             ('URL', 'https://github.com/ReinhardC/softimage'),
